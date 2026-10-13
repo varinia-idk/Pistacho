@@ -153,7 +153,8 @@ func _build_join() -> Control:
 	ip_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ip_edit.custom_minimum_size = Vector2(560.0, 104.0)
 	ip_edit.add_theme_font_size_override("font_size", 40)
-	ip_edit.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER_DECIMAL
+	# Una IP contiene varios puntos; el teclado decimal puede filtrarlos en Android.
+	ip_edit.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_URL
 	ip_edit.text_submitted.connect(func(_text: String) -> void: _connect())
 	card.add_child(_row([ip_edit]))
 	var connect_button := Style.button("Conectar", true, 340.0)
