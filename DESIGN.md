@@ -16,12 +16,12 @@
 - Estado a 60 Hz (~13 KB/s por cliente) con el reloj de simulación del anfitrión. Sin throttle de ENet (descarta no fiables si sube la latencia).
 - ROUND lleva modo + semilla + cfg completa del anfitrión: con otra cfg, la misma semilla da otro mapa.
 - Clientes: interpolación por instantáneas, no el lerp de la spec (`test_interp`: tirón p95 77–94 % → 10 %). Retardo = 1.5 intervalos + jitter recordado 10 s (40–250 ms); sin datos, el dibujo va al 60 % en vez de congelarse; saltos > 4 radios no se interpolan.
-- Input remoto sin llegar 0.3 s → cero. Peer caído (≤ 8 s) o que sale → su ranura pasa a bot sin parar la ronda.
-- Durante la partida la sala rechaza conexiones; `PROTOCOL` distinto → el cliente vuelve al menú.
+- Predicción (`net_predict`, desvío de la spec): el cliente simula su bola con la cfg de la ronda y paredes locales; el anfitrión devuelve el último input aplicado y el cliente corrige (física al instante, vista suave). Caídas, metas y choques entre jugadores siguen siendo del anfitrión. Respuesta en localhost: 111 → ~50 ms.
+- Input remoto sin llegar 0.3 s → cero. Peer caído (≤ 8 s) o que sale → bot sin parar la ronda. En partida la sala rechaza conexiones; `PROTOCOL` distinto → menú.
 
 ## Dudas
 - Rondas de laberinto con bots ~20 s (objetivo 60–120 s): ¿mapa mayor con cámara que sigue o rutas más largas?
-- Sin predicción, la bola propia de un cliente responde con ida y vuelta + retardo de dibujo (≈ 60–170 ms); el anfitrión juega con ventaja.
+- Los choques con otros jugadores se ven en el cliente con ida y vuelta de retraso (no se predicen).
 - Espiral con personajes de 40 px no cabe en 1080 → cámara que sigue (fase 4).
 - Mac como cliente: AWDL (AirDrop/Handoff) pausa la Wi-Fi periódicamente; el overlay muestra "hueco máx" y "sin datos".
 

@@ -45,6 +45,7 @@ const DEFAULTS := {
 	"net_state_hz": [60, 15, 60],      # Estados por segundo del anfitrión.
 	"net_delay_min": [0.04, 0.0, 0.2], # Retardo de dibujo mínimo en clientes, s (se adapta al jitter).
 	"net_delay_max": [0.25, 0.05, 0.5],
+	"net_predict": [1, 0, 1],          # Cliente: simular la bola propia al instante y corregir con el anfitrión.
 	# Laberinto
 	"maze_corridor": [1.6, 1.6, 3.0],
 	"maze_wall": [0.3, 0.3, 1.0],
@@ -108,6 +109,11 @@ func snapshot() -> Dictionary[String, float]:
 	return _values.duplicate()
 
 
+## Referencia a los valores vivos: quien la guarda ve los cambios del overlay al instante.
+func live() -> Dictionary[String, float]:
+	return _values
+
+
 func set_value(key: String, new_value: float) -> void:
 	if not DEFAULTS.has(key) or not is_finite(new_value):
 		return
@@ -122,7 +128,10 @@ func set_value(key: String, new_value: float) -> void:
 
 
 func reset() -> void:
-	_values = defaults()
+	# En sitio: mantiene válidas las referencias de live().
+	var base := defaults()
+	for key: String in base:
+		_values[key] = base[key]
 	changed.emit("")
 
 

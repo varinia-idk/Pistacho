@@ -67,7 +67,7 @@ func build_physics() -> void:
 	body.collision_layer = Player.LAYER_WALLS
 	body.collision_mask = 0
 	body.physics_material_override = PhysicsMaterial.new()
-	Player.configure_wall_material(body.physics_material_override)
+	Player.configure_wall_material(body.physics_material_override, Game.physics_params())
 	Config.changed.connect(_on_config_changed)
 	for i in range(0, segments.size(), 2):
 		var from := segments[i]
@@ -85,7 +85,7 @@ func build_physics() -> void:
 
 
 func _on_config_changed(_key: String) -> void:
-	Player.configure_wall_material(_walls.physics_material_override)
+	Player.configure_wall_material(_walls.physics_material_override, Game.physics_params())
 
 
 func spawn_points() -> Array[Vector2]:

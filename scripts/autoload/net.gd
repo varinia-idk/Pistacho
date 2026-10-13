@@ -151,11 +151,12 @@ func _process(_delta: float) -> void:
 
 # --- RPCs (spec §6) ---
 
+## seq numera los inputs del cliente: el anfitrión lo devuelve en el estado para la predicción.
 @rpc("any_peer", "call_remote", "unreliable_ordered", 1)
-func send_input(tilt: Vector2) -> void:
+func send_input(tilt: Vector2, seq: int) -> void:
 	var slot := _sender_slot()
 	if slot > 0 and tilt.is_finite():
-		Game.remote_input(slot, tilt.limit_length(1.0))
+		Game.remote_input(slot, tilt.limit_length(1.0), seq)
 
 
 @rpc("any_peer", "call_remote", "reliable", 0)

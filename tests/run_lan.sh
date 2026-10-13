@@ -33,6 +33,14 @@ CDY=$(num 'LAN client ranura1 dy' "$OUT/lan-client1.log")
 check "el cliente ve su bola moverse (dy=$CDY)" 'awk "BEGIN{exit !(${CDY:-0} > 50)}"'
 HZ=$(num 'LAN client estados' "$OUT/lan-client1.log")
 check "estado a ~60 Hz ($HZ Hz)" 'awk "BEGIN{exit !(${HZ:-0} > 50 && ${HZ:-0} < 70)}"'
+RESP=$(grep -h 'LAN client respuesta' "$OUT/lan-client1.log" | head -1 | sed -E 's/.* ([0-9]+) ms/\1/')
+check "con predicción la bola propia responde rápido (${RESP} ms)" 'awk "BEGIN{exit !(${RESP:-999} < 80)}"'
+CORR=$(grep -h 'LAN client corrección máx' "$OUT/lan-client1.log" | head -1 | sed -E 's/.* ([0-9.]+) px/\1/')
+check "el empujón del anfitrión se corrige en el cliente (${CORR} px)" 'awk "BEGIN{exit !(${CORR:-0} > 1)}"'
+HP=$(grep -h 'LAN host pos' "$OUT/lan-host.log" | head -1 | awk '{print $4, $5}')
+CP=$(grep -h 'LAN client pos' "$OUT/lan-client1.log" | head -1 | awk '{print $4, $5}')
+GAP=$(echo "$HP $CP" | awk '{dx=$1-$3; dy=$2-$4; printf "%.1f", sqrt(dx*dx+dy*dy)}')
+check "tras corregir, cliente y anfitrión coinciden (${GAP} px)" 'awk "BEGIN{exit !(${GAP:-999} < 3)}"'
 check "el cliente que se va pasa a bot" 'grep -q "LAN host ranura2 bot" "$OUT/lan-host.log"'
 check "fin de partida en anfitrión y cliente" 'grep -q "LAN host fin" "$OUT/lan-host.log" && grep -q "LAN client fin" "$OUT/lan-client1.log"'
 check "el cliente vuelve al menú al cerrar la sala" 'grep -q "LAN client desconectado" "$OUT/lan-client1.log"'

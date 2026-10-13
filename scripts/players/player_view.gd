@@ -3,7 +3,7 @@ extends Node2D
 ## en los clientes es independiente y Game la coloca con la interpolación por instantáneas.
 
 ## Campos por jugador en el paquete de estado, tras la ranura (ver Game._pack_state).
-const STATE_FIELDS := 9
+const STATE_FIELDS := 10
 const FLAG_SHIELD := 1
 
 var color := Color.WHITE
@@ -22,7 +22,7 @@ func make_remote(start: Vector2) -> void:
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 
 
-## fields: x, y, radio, flags, vx, vy, caída, recarga dash, impulso dash.
+## fields: x, y, radio, flags, vx, vy, caída, recarga dash, impulso dash, último input aplicado.
 func apply_fields(fields: PackedFloat32Array) -> void:
 	position = Vector2(fields[0], fields[1])
 	radius = fields[2]
