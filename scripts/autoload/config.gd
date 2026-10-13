@@ -15,7 +15,7 @@ const DEFAULTS := {
 	"dead_zone_deg": [1.5, 0.0, 10.0],
 	"saturation_deg": [15.0, 5.0, 60.0],
 	"response_exp": [1.25, 1.0, 3.0],
-	"tilt_smooth_ms": [50.0, 0.0, 200.0],
+	"tilt_smooth_ms": [30.0, 0.0, 200.0],
 	"dash_gyro": [4.0, 1.5, 12.0],
 	"dash_lookback": [0.1, 0.0, 0.3],
 	"dash_hold": [0.15, 0.0, 0.5],
@@ -26,9 +26,10 @@ const DEFAULTS := {
 	"hit_vibe_dv": [140.0, 20.0, 600.0],
 	# Física
 	"player_radius": [20.0, 14.0, 32.0],
-	"tilt_accel": [1100.0, 200.0, 3000.0],
+	"tilt_accel": [2400.0, 200.0, 5000.0],
 	"max_speed": [380.0, 120.0, 900.0],
-	"damping": [1.0, 0.0, 6.0],
+	"damping": [3.0, 0.0, 8.0],
+	"turn_boost": [1.0, 0.0, 3.0],     # Fuerza extra al inclinar contra la velocidad actual.
 	"friction": [0.1, 0.0, 1.0],
 	"player_bounce": [0.6, 0.0, 1.0],   # Rebote resultante entre jugadores.
 	"wall_bounce": [0.3, 0.0, 1.0],     # Rebote resultante contra paredes.
@@ -40,6 +41,10 @@ const DEFAULTS := {
 	"bot_skill": [0.75, 0.1, 1.0],
 	"bot_corner": [0.35, 0.1, 1.0],
 	"bot_patience": [0.4, 0.1, 2.0],
+	# Red
+	"net_state_hz": [60, 15, 60],      # Estados por segundo del anfitrión.
+	"net_delay_min": [0.04, 0.0, 0.2], # Retardo de dibujo mínimo en clientes, s (se adapta al jitter).
+	"net_delay_max": [0.25, 0.05, 0.5],
 	# Laberinto
 	"maze_corridor": [1.6, 1.6, 3.0],
 	"maze_wall": [0.3, 0.3, 1.0],

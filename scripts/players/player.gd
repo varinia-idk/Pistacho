@@ -92,7 +92,13 @@ func step(time: float) -> void:
 	linear_damp = 0.0 if boosting else Config.value("damping")
 	_speed_cap = Config.value("max_speed") + Config.value("dash_speed") * (1.0 - progress * progress)
 	if state == State.ALIVE:
-		apply_central_force(tilt * Config.value("tilt_accel") * mass)
+		# Fuerza, nunca velocidad. Contra la velocidad actual empuja más (giros y frenadas más vivos).
+		var force := tilt * Config.value("tilt_accel") * mass
+		var speed := linear_velocity.length()
+		if speed > 30.0 and tilt.length() > 0.01:
+			var align := tilt.normalized().dot(linear_velocity / speed)
+			force *= 1.0 + Config.value("turn_boost") * (1.0 - align) * 0.5
+		apply_central_force(force)
 	_update_view()
 
 

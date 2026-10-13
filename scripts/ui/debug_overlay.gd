@@ -108,6 +108,6 @@ func _process(_delta: float) -> void:
 	var t := Game.tilt.value
 	var net := get_node_or_null("/root/Net")
 	var ping := "%d ms" % net.get("ping_ms") if net else "—"
-	readout.text = "gravedad cruda  (%.2f, %.2f, %.2f)  |g| %.2f\ngiroscopio  (%.2f, %.2f, %.2f) rad/s\ninclinación  (%.2f, %.2f)  %s\nFPS %d · ping %s" % [
+	readout.text = "gravedad cruda  (%.2f, %.2f, %.2f)  |g| %.2f\ngiroscopio  (%.2f, %.2f, %.2f) rad/s\ninclinación  (%.2f, %.2f)  %s\nFPS %d · ping %s  %s" % [
 		g.x, g.y, g.z, g.length(), w.x, w.y, w.z, t.x, t.y,
-		"calibrando" if Game.tilt.calibrating else "", Engine.get_frames_per_second(), ping]
+		"calibrando" if Game.tilt.calibrating else "", Engine.get_frames_per_second(), ping, Game.net_stats()]

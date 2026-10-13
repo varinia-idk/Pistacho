@@ -1,11 +1,10 @@
 extends Node2D
 ## Representación de un jugador. En el anfitrión es hija del cuerpo físico;
-## en los clientes es independiente e interpola hacia el último estado recibido.
+## en los clientes es independiente y Game la coloca con la interpolación por instantáneas.
 
 ## Campos por jugador en el paquete de estado, tras la ranura (ver Game._pack_state).
 const STATE_FIELDS := 9
 const FLAG_SHIELD := 1
-const FOLLOW_RATE := 15.0
 
 var color := Color.WHITE
 var radius := 20.0
@@ -15,21 +14,17 @@ var invulnerable := false
 var dash_ready := 1.0       ## 0..1 recarga del dash
 var boost := 0.0            ## 1 al iniciar el dash, 0 al terminar
 var heading := Vector2.RIGHT
-var follow := false         ## Cliente: se mueve hacia target en _process.
-var target := Vector2.ZERO
 
 
-func make_follower(start: Vector2) -> void:
-	follow = true
+## Cliente: se coloca en _process, fuera de la interpolación física.
+func make_remote(start: Vector2) -> void:
 	position = start
-	target = start
-	# Se mueve en _process: fuera de la interpolación física.
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 
 
 ## fields: x, y, radio, flags, vx, vy, caída, recarga dash, impulso dash.
-func apply_state(fields: PackedFloat32Array) -> void:
-	target = Vector2(fields[0], fields[1])
+func apply_fields(fields: PackedFloat32Array) -> void:
+	position = Vector2(fields[0], fields[1])
 	radius = fields[2]
 	invulnerable = int(fields[3]) & FLAG_SHIELD != 0
 	var velocity := Vector2(fields[4], fields[5])
@@ -40,13 +35,7 @@ func apply_state(fields: PackedFloat32Array) -> void:
 	boost = fields[8]
 
 
-func _process(delta: float) -> void:
-	if follow:
-		# Reapariciones y teletransportes: saltar en vez de cruzar el mapa.
-		if position.distance_to(target) > radius * 4.0:
-			position = target
-		else:
-			position = position.lerp(target, 1.0 - exp(-FOLLOW_RATE * delta))
+func _process(_delta: float) -> void:
 	queue_redraw()
 
 

@@ -13,12 +13,12 @@ Party game 2D para Android en Godot 4.7.2: hasta 4 jugadores inclinan el teléfo
 ## Estructura
 ```text
 scripts/autoload/   Config (números ajustables), Net (sala y RPCs) y Game (rondas, puntos, input, bots)
-scripts/core/       GameMode (base de los modos) y puente del MCP de editor
+scripts/core/       GameMode (base de los modos), interpolación de red y puente del MCP de editor
 scripts/input/      Lectura de inclinación y gesto de dash
 scripts/players/    Jugador (RigidBody2D), vista y bot
 scripts/modes/      maze/ (generador puro + modo) y mountain/ (generador de espiral)
 scripts/ui/         Escena principal, HUD y overlay de debug
-tests/              test_maze, test_spiral, test_tilt, sim_bots y sim_lan + run_lan.sh
+tests/              test_maze, test_spiral, test_tilt, test_interp, sim_bots y sim_lan + run_lan.sh
 ```
 
 ## Tests
@@ -26,6 +26,7 @@ tests/              test_maze, test_spiral, test_tilt, sim_bots y sim_lan + run_
 godot --headless --path . -s res://tests/test_maze.gd
 godot --headless --path . -s res://tests/test_spiral.gd
 godot --headless --path . -s res://tests/test_tilt.gd
+godot --headless --path . -s res://tests/test_interp.gd
 godot --headless --path . --fixed-fps 60 res://tests/sim_bots.tscn -- 15   # simulación solo con bots
 sh tests/run_lan.sh                                                          # LAN real: anfitrión + 2 clientes
 ```

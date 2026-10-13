@@ -14,6 +14,7 @@ const Player = preload("res://scripts/players/player.gd")
 const PlayerView = preload("res://scripts/players/player_view.gd")
 const Bot = preload("res://scripts/players/bot.gd")
 const TiltReader = preload("res://scripts/input/tilt_reader.gd")
+const Interp = preload("res://scripts/core/interpolation.gd")
 ## Un modo nuevo = una escena más aquí; las rondas alternan en este orden.
 const MODE_SCENES: Array[String] = ["res://scenes/modes/maze.tscn"]
 const COLORS: Array[Color] = [Color("ff5a36"), Color("3fa9f5"), Color("ffd60a"), Color("c56bff")]
@@ -23,7 +24,6 @@ const COUNTDOWN := 3.0
 const CALIBRATION := 1.5    ## Últimos segundos de la cuenta en los que se promedia g0.
 const ROUND_END_TIME := 3.0
 const INPUT_TIMEOUT := 0.3  ## Sin input remoto durante este tiempo, la inclinación vuelve a cero.
-const STATE_EVERY := 2      ## Ticks físicos entre paquetes de estado: 60 Hz / 2 = 30 Hz.
 
 var phase := Phase.MENU
 var phase_left := 0.0
@@ -41,6 +41,10 @@ var tilt := TiltReader.new()
 var _rng := RandomNumberGenerator.new()
 var _input_age: Array[float] = [0.0, 0.0, 0.0, 0.0]
 var _tick := 0
+var _sim_clock := 0.0                  ## Anfitrión: tiempo de simulación, va en cada estado.
+var _clock := Interp.Clock.new()       ## Cliente: reloj del anfitrión y retardo de dibujo.
+var _tracks: Array = []                ## Cliente: Interp.Track por ranura.
+var _time_track := Interp.Track.new()  ## Cliente: tiempo del modo.
 
 
 func _ready() -> void:
@@ -194,10 +198,12 @@ func _physics_process(delta: float) -> void:
 			phase_left -= delta
 			if phase_left <= 0.0 and Net.is_host():
 				_next_round()
-	if Net.online and Net.is_host() and mode != null and not players.is_empty():
-		_tick += 1
-		if _tick % STATE_EVERY == 0:
-			Net.send_state(_pack_state())
+	if Net.online and Net.is_host():
+		_sim_clock += delta
+		if mode != null and not players.is_empty():
+			_tick += 1
+			if _tick % maxi(1, roundi(Engine.physics_ticks_per_second / Config.value("net_state_hz"))) == 0:
+				Net.send_state(_pack_state())
 
 
 func _play_step(delta: float) -> void:
@@ -243,9 +249,9 @@ func _set_phase(value: Phase, duration: float = 0.0) -> void:
 	phase_changed.emit(phase)
 
 
-## Por ranura: slot + PlayerView.STATE_FIELDS valores.
+## [reloj de simulación, tiempo del modo] y, por ranura, slot + PlayerView.STATE_FIELDS valores.
 func _pack_state() -> PackedFloat32Array:
-	var data := PackedFloat32Array([mode.time])
+	var data := PackedFloat32Array([_sim_clock, mode.time])
 	for player in players:
 		var view := player.view
 		data.append_array([player.slot, player.position.x, player.position.y, player.radius,
@@ -292,9 +298,16 @@ func client_round(args: Array) -> void:
 		view.color = COLORS[slot]
 		view.radius = cfg["player_radius"]
 		view.is_local = slot == local_slot
-		view.make_follower(spawns[slot])
+		view.make_remote(spawns[slot])
 		mode.add_child(view)
 		views.append(view)
+	_clock.reset()
+	_time_track = Interp.Track.new()
+	_tracks.clear()
+	for slot in SLOTS:
+		var track := Interp.Track.new()
+		track.snap_distance = cfg["player_radius"] * 4.0  # Reapariciones: saltar, no cruzar el mapa.
+		_tracks.append(track)
 	tilt.reset()
 	_set_phase(Phase.COUNTDOWN, COUNTDOWN)
 	round_started.emit()
@@ -316,18 +329,37 @@ func client_phase(args: Array) -> void:
 
 func apply_state(data: PackedFloat32Array) -> void:
 	var stride := 1 + PlayerView.STATE_FIELDS
-	if Net.is_host() or mode == null or views.size() < SLOTS or data.size() < 1 + SLOTS * stride:
+	if Net.is_host() or mode == null or _tracks.size() < SLOTS or data.size() < 2 + SLOTS * stride:
 		return
-	mode.time = data[0]
+	var server_time := data[0]
+	_clock.observe(server_time, Time.get_ticks_usec() / 1e6, 1.0 / mode.cfg["net_state_hz"],
+		Config.value("net_delay_min"), Config.value("net_delay_max"))
+	_time_track.push(server_time, PackedFloat32Array([data[1]]))
 	for i in SLOTS:
-		var base := 1 + i * stride
+		var base := 2 + i * stride
 		var slot := int(data[base])
 		if slot >= 0 and slot < SLOTS:
-			views[slot].apply_state(data.slice(base + 1, base + stride))
+			_tracks[slot].push(server_time, data.slice(base + 1, base + stride))
 
 
-func _client_step(delta: float) -> void:
-	mode.time += delta  # Entre paquetes; cada estado lo corrige.
+## Cliente: todo se dibuja en el mismo instante pasado del anfitrión, entre dos estados conocidos.
+func _process(delta: float) -> void:
+	if Net.is_host() or mode == null or _time_track.is_empty():
+		return
+	var moment := _clock.render_time(Time.get_ticks_usec() / 1e6, delta)
+	mode.time = _time_track.sample(moment)[0]
+	for slot in mini(views.size(), _tracks.size()):
+		if not _tracks[slot].is_empty():
+			views[slot].apply_fields(_tracks[slot].sample(moment))
+
+
+func net_stats() -> String:
+	if not Net.online or Net.is_host():
+		return ""
+	return "retardo %d ms · jitter %d ms" % [roundi(_clock.delay * 1000.0), roundi(_clock.jitter * 1000.0)]
+
+
+func _client_step(_delta: float) -> void:
 	Net.send_input.rpc_id(1, tilt.value)
 	if tilt.consume_dash():
 		request_action(Action.DASH)

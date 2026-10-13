@@ -32,7 +32,7 @@ check "la inclinación del cliente mueve su bola en el anfitrión (dy=$HDY)" 'aw
 CDY=$(num 'LAN client ranura1 dy' "$OUT/lan-client1.log")
 check "el cliente ve su bola moverse (dy=$CDY)" 'awk "BEGIN{exit !(${CDY:-0} > 50)}"'
 HZ=$(num 'LAN client estados' "$OUT/lan-client1.log")
-check "estado a ~30 Hz ($HZ Hz)" 'awk "BEGIN{exit !(${HZ:-0} > 24 && ${HZ:-0} < 36)}"'
+check "estado a ~60 Hz ($HZ Hz)" 'awk "BEGIN{exit !(${HZ:-0} > 50 && ${HZ:-0} < 70)}"'
 check "el cliente que se va pasa a bot" 'grep -q "LAN host ranura2 bot" "$OUT/lan-host.log"'
 check "fin de partida en anfitrión y cliente" 'grep -q "LAN host fin" "$OUT/lan-host.log" && grep -q "LAN client fin" "$OUT/lan-client1.log"'
 check "el cliente vuelve al menú al cerrar la sala" 'grep -q "LAN client desconectado" "$OUT/lan-client1.log"'

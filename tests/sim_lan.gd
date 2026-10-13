@@ -79,7 +79,7 @@ func _on_phase(phase: Game.Phase) -> void:
 func _position_of(slot: int) -> Vector2:
 	if role == "host":
 		return Game.players[slot].position
-	return Game.views[slot].target
+	return Game.views[slot].position
 
 
 func _physics_process(delta: float) -> void:
