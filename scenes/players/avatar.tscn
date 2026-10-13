@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://w4anwdi72rb6"]
+
+[ext_resource type="Script" uid="uid://b8t7kic3rwmmq" path="res://scripts/players/avatar.gd" id="1_p6fil"]
+
+[node name="Avatar" type="Node2D" unique_id=407466784]
+script = ExtResource("1_p6fil")

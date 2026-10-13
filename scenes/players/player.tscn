@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://brtvrtdo6kogw"]
+
+[ext_resource type="Script" uid="uid://bepja0swfhkwf" path="res://scripts/players/player.gd" id="1_plyga"]
+
+[node name="Player" type="CharacterBody2D" unique_id=74904723]
+script = ExtResource("1_plyga")

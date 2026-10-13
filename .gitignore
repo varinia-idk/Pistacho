@@ -1,0 +1,8 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+/build/
+/tests/output/
+/addons/godot_mcp/cache/
+*.keystore
+.DS_Store

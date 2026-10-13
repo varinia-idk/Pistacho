@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://dx3te2sp04le"]
+
+[ext_resource type="Script" uid="uid://h2v1b80r7lpl" path="res://scripts/ui/main.gd" id="1_0ay0p"]
+
+[node name="Pistacho" type="Control" unique_id=336169004]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_0ay0p")

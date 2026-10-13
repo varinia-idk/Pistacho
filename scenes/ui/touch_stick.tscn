@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://b3e6sbs2i57ag"]
+
+[ext_resource type="Script" uid="uid://bcghg8mbx5kas" path="res://scripts/ui/touch_stick.gd" id="1_bjey8"]
+
+[node name="TouchStick" type="Control" unique_id=2146103410]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_bjey8")
