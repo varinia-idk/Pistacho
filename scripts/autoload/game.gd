@@ -346,7 +346,7 @@ func apply_state(data: PackedFloat32Array) -> void:
 func _process(delta: float) -> void:
 	if Net.is_host() or mode == null or _time_track.is_empty():
 		return
-	var moment := _clock.render_time(Time.get_ticks_usec() / 1e6, delta)
+	var moment := _clock.render_time(Time.get_ticks_usec() / 1e6, delta, _time_track.newest())
 	mode.time = _time_track.sample(moment)[0]
 	for slot in mini(views.size(), _tracks.size()):
 		if not _tracks[slot].is_empty():
@@ -356,7 +356,8 @@ func _process(delta: float) -> void:
 func net_stats() -> String:
 	if not Net.online or Net.is_host():
 		return ""
-	return "retardo %d ms · jitter %d ms" % [roundi(_clock.delay * 1000.0), roundi(_clock.jitter * 1000.0)]
+	return "retardo %d ms · jitter %d ms · hueco máx %d ms · sin datos %d" % [
+		roundi(_clock.delay * 1000.0), roundi(_clock.jitter * 1000.0), roundi(_clock.gap * 1000.0), _clock.stalls]
 
 
 func _client_step(_delta: float) -> void:

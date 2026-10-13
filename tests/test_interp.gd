@@ -12,15 +12,28 @@ const DURATION := 6.0
 
 func _init() -> void:
 	var failures := 0
-	# [nombre, probabilidad de ráfaga, retraso extra mín, máx]
-	for net: Array in [["wifi normal", 0.05, 0.01, 0.04], ["wifi móvil con ahorro", 0.15, 0.04, 0.12]]:
+	# [nombre, probabilidad de ráfaga, retraso extra mín, máx, pausa periódica (s, 0 = sin pausas)]
+	for net: Array in [["wifi normal", 0.05, 0.01, 0.04, 0.0], ["wifi móvil con ahorro", 0.15, 0.04, 0.12, 0.0],
+			["pausas periódicas (AWDL)", 0.05, 0.01, 0.04, 0.25]]:
 		for fps in [60.0, 120.0]:
-			var packets := _network(1234, net[1], net[2], net[3])
-			var chase := _render_chase(packets, fps)
-			var snapshots := _render_snapshots(packets, fps)
-			print("test_interp %s %d fps | lerp spec: tirón p95 %.0f %%, máx %.0f %% | instantáneas: p95 %.0f %%, máx %.0f %%, retardo %.0f ms" % [
-				net[0], fps, chase[0] * 100.0, chase[1] * 100.0, snapshots[0] * 100.0, snapshots[1] * 100.0, snapshots[2] * 1000.0])
-			if snapshots[0] > 0.15 or snapshots[1] > 0.5 or snapshots[2] > 0.2:
+			# Peor resultado entre varias redes simuladas con el mismo perfil.
+			var chase := [0.0, 0.0, 0.0]
+			var snapshots := [0.0, 0.0, 0.0, 0]
+			for seed_value in [1234, 99, 7]:
+				var packets := _network(seed_value, net[1], net[2], net[3], net[4])
+				var c := _render_chase(packets, fps)
+				var r := _render_snapshots(packets, fps)
+				for k in c.size():
+					chase[k] = maxf(chase[k], c[k])
+				for k in r.size():
+					snapshots[k] = maxf(snapshots[k], r[k])
+			print("test_interp %s %d fps | lerp spec: tirón p95 %.0f %%, máx %.0f %% | instantáneas: p95 %.0f %%, máx %.0f %%, retardo %.0f ms, frames parados %d" % [
+				net[0], fps, chase[0] * 100.0, chase[1] * 100.0, snapshots[0] * 100.0, snapshots[1] * 100.0, snapshots[2] * 1000.0, snapshots[3]])
+			# Con pausas, la primera aún no aprendida puede costar un frame parado; el resto, solo ralentizar.
+			var stalls: bool = net[4] > 0.0
+			var max_jerk := 1.0 if stalls else 0.45
+			var max_frozen := 1 if stalls else 0
+			if snapshots[0] > 0.15 or snapshots[1] > max_jerk or snapshots[2] > 0.25 or snapshots[3] > max_frozen:
 				failures += 1
 				printerr("instantáneas (%s, %d fps): demasiado irregular o retrasado" % [net[0], fps])
 	failures += _check_teleport()
@@ -29,13 +42,18 @@ func _init() -> void:
 
 
 ## [tiempo de llegada, tiempo del anfitrión, x]; FIFO como un canal ordenado.
-func _network(seed_value: int, burst_chance: float, burst_min: float, burst_max: float) -> Array:
+func _network(seed_value: int, burst_chance: float, burst_min: float, burst_max: float, stall_max: float) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	var packets := []
 	var arrival := 0.0
+	var stall_at := rng.randf_range(1.0, 2.0)
 	for k in int(DURATION * SEND_HZ):
 		var sent := k / SEND_HZ
+		if stall_max > 0.0 and sent >= stall_at:
+			# Pausa del receptor: nada llega hasta que termina; luego llega todo junto.
+			arrival = maxf(arrival, sent + rng.randf_range(0.1, stall_max))
+			stall_at = sent + rng.randf_range(1.0, 2.0)
 		var latency := 0.02 + rng.randf_range(0.0, 0.015)
 		if rng.randf() < burst_chance:
 			latency += rng.randf_range(burst_min, burst_max)  # Ráfagas tardías (ahorro de energía de la Wi-Fi).
@@ -80,7 +98,7 @@ func _render_snapshots(packets: Array, fps: float) -> Array:
 		if track.is_empty():
 			continue
 		var before := x
-		var rendered := clock.render_time(now, 1.0 / fps)
+		var rendered := clock.render_time(now, 1.0 / fps, track.newest())
 		x = track.sample(rendered)[0]
 		if now > 1.0:
 			steps.append(x - before)
@@ -88,6 +106,7 @@ func _render_snapshots(packets: Array, fps: float) -> Array:
 			lag_samples += 1
 	var result := _jerk(steps, SPEED / fps)
 	result.append(lag / lag_samples)
+	result.append(steps.filter(func(step: float) -> bool: return step < SPEED / fps * 0.1).size())
 	return result
 
 
