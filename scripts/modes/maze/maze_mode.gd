@@ -25,6 +25,7 @@ var segments := PackedVector2Array()  ## Pares (inicio, fin) de paredes fusionad
 var finish_order: Array[int] = []
 var history: Dictionary[int, Array] = {}
 var _effects := Node2D.new()
+var _walls: StaticBody2D
 var _bot_run: Dictionary[int, int] = {}
 var _bot_axis: Dictionary[int, Vector2] = {}
 var _bot_hole: Dictionary[int, int] = {}
@@ -62,12 +63,13 @@ func setup(_seed_value: int) -> void:
 
 func build_physics() -> void:
 	var body := StaticBody2D.new()
+	_walls = body
 	body.name = "Walls"
 	body.collision_layer = Player.LAYER_WALLS
 	body.collision_mask = 0
 	body.physics_material_override = PhysicsMaterial.new()
-	body.physics_material_override.bounce = Config.value("wall_bounce")
-	body.physics_material_override.friction = Config.value("friction")
+	Player.configure_wall_material(body.physics_material_override)
+	Config.changed.connect(_on_config_changed)
 	for i in range(0, segments.size(), 2):
 		var from := segments[i]
 		var to := segments[i + 1]
@@ -81,6 +83,10 @@ func build_physics() -> void:
 		collider.position = (from + to) * 0.5
 		body.add_child(collider)
 	add_child(body)
+
+
+func _on_config_changed(_key: String) -> void:
+	Player.configure_wall_material(_walls.physics_material_override)
 
 
 func spawn_points() -> Array[Vector2]:

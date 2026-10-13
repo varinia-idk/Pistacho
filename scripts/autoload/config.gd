@@ -5,21 +5,23 @@ extends Node
 signal changed(key: String)
 
 const PATH := "user://config.json"
+## Subir al cambiar el significado de una clave: los ajustes guardados con otra versión se descartan.
+const VERSION := 2
 const DEFAULTS := {
 	# Control
 	"swap_xy": [0, 0, 1],
 	"invert_x": [0, 0, 1],
 	"invert_y": [1, 0, 1],
-	"dead_zone_deg": [2.0, 0.0, 10.0],
-	"saturation_deg": [25.0, 8.0, 60.0],
-	"response_exp": [1.6, 1.0, 3.0],
+	"dead_zone_deg": [1.5, 0.0, 10.0],
+	"saturation_deg": [15.0, 5.0, 60.0],
+	"response_exp": [1.25, 1.0, 3.0],
 	"tilt_smooth_ms": [50.0, 0.0, 200.0],
 	"dash_gyro": [4.0, 1.5, 12.0],
 	"dash_lookback": [0.1, 0.0, 0.3],
 	"dash_hold": [0.15, 0.0, 0.5],
 	"dash_cooldown": [1.5, 0.3, 5.0],
-	"dash_speed": [320.0, 50.0, 900.0],
-	"dash_boost_time": [0.35, 0.05, 1.0],
+	"dash_speed": [550.0, 50.0, 1000.0],
+	"dash_boost_time": [0.45, 0.05, 1.0],
 	"vibration": [1, 0, 1],
 	"hit_vibe_dv": [140.0, 20.0, 600.0],
 	# Física
@@ -28,8 +30,8 @@ const DEFAULTS := {
 	"max_speed": [380.0, 120.0, 900.0],
 	"damping": [1.0, 0.0, 6.0],
 	"friction": [0.1, 0.0, 1.0],
-	"player_bounce": [0.6, 0.0, 1.0],
-	"wall_bounce": [0.2, 0.0, 1.0],
+	"player_bounce": [0.6, 0.0, 1.0],   # Rebote resultante entre jugadores.
+	"wall_bounce": [0.05, 0.0, 1.0],    # Rebote resultante contra paredes.
 	# Partida
 	"rounds": [5, 1, 15],
 	"round_time": [120.0, 30.0, 300.0],
@@ -118,12 +120,18 @@ func reset() -> void:
 	changed.emit("")
 
 
+## Solo guarda lo que difiere del valor por defecto: los cambios de defaults llegan a quien no tocó esa clave.
 func save_file() -> void:
+	var overrides := {"_version": VERSION}
+	var base := defaults()
+	for key: String in _values:
+		if _values[key] != base[key]:
+			overrides[key] = _values[key]
 	var file := FileAccess.open(PATH, FileAccess.WRITE)
 	if file == null:
 		push_warning("No se pudo guardar %s: %s" % [PATH, error_string(FileAccess.get_open_error())])
 		return
-	file.store_string(JSON.stringify(_values, "\t", true))
+	file.store_string(JSON.stringify(overrides, "\t", true))
 
 
 func load_file() -> void:
@@ -132,6 +140,9 @@ func load_file() -> void:
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(PATH))
 	if not parsed is Dictionary:
 		push_warning("Ignorando %s: JSON inválido" % PATH)
+		return
+	if parsed.get("_version", 0) != VERSION:
+		push_warning("Ignorando %s: guardado con otra versión de Config" % PATH)
 		return
 	for key: Variant in parsed:
 		var stored: Variant = parsed[key]

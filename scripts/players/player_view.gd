@@ -7,6 +7,7 @@ var is_local := false
 var falling := 0.0          ## 0..1 progreso de la caída
 var invulnerable := false
 var dash_ready := 1.0       ## 0..1 recarga del dash
+var boost := 0.0            ## 1 al iniciar el dash, 0 al terminar
 var heading := Vector2.RIGHT
 
 
@@ -21,6 +22,11 @@ func _draw() -> void:
 	var body := color.darkened(falling * 0.6)
 	if invulnerable:
 		body.a = 0.5
+	if boost > 0.0:
+		# Estela detrás y onda expansiva al arrancar el dash.
+		for k in range(4, 0, -1):
+			draw_circle(-heading * size * 0.6 * k, size * (1.0 - 0.14 * k), Color(color, 0.5 * boost * (1.0 - k / 5.0)), true, -1.0, true)
+		draw_arc(Vector2.ZERO, size + 8.0 + 40.0 * (1.0 - boost), 0.0, TAU, 48, Color(1, 1, 1, boost * boost), 4.0, true)
 	draw_circle(Vector2(0.0, size * 0.22), size, Color(0, 0, 0, 0.35 * body.a), true, -1.0, true)
 	draw_circle(Vector2.ZERO, size, body, true, -1.0, true)
 	draw_circle(Vector2(-0.3, -0.35) * size, size * 0.28, Color(1, 1, 1, 0.35 * body.a), true, -1.0, true)

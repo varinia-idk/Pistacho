@@ -2,7 +2,11 @@
 
 ## Supuestos
 - Ejes: Godot reorienta los sensores a la pantalla (x derecha, y arriba), por eso `invert_y = 1` por defecto. Confirmar en el teléfono con el overlay.
-- Curva radial: dirección × pow(t, 1.6), no por eje, para no deformar las diagonales.
+- Inclinación = componentes de (g − g0) en el plano tangente a g0, no XY crudas: las XY pierden sensibilidad por cos(ángulo de sujeción) (−29 % a 45°). Alabear sobre el eje propio del teléfono sigue midiendo menos: es física, no fórmula.
+- Curva radial con 1.5° / 15° / 1.25 (la spec pedía 2° / 25° / 1.6: a 10° solo daba 19 % de fuerza; tras prueba en móvil, demasiado tosco).
+- Rebote: Godot suma el de ambos cuerpos. `player_bounce` y `wall_bounce` son el rebote resultante; la pared resta (absorbent) cuando hace falta. Medido: pared 0.05, jugadores 0.6.
+- Dash: anula la velocidad en contra, impulso 550 px/s, sin amortiguación durante 0.45 s y tope que cae como 1 − p² (~165 px extra, antes ~56).
+- `user://config.json` guarda solo los valores cambiados + versión; cambiar defaults no queda tapado por guardados viejos.
 - Dash: durante el giro brusco la inclinación se congela en la de hace `dash_lookback` s; el gesto no desvía el impulso.
 - `maze_min_path` es relativo a la distancia Manhattan (P1 ≥ 1.3×), así sigue siendo alcanzable si cambia el radio.
 - Geometría del mapa = f(Config) sobre la base 1920×1080 menos HUD; nunca depende de la pantalla del dispositivo.
@@ -15,7 +19,6 @@
 
 ## Dudas
 - Con bots, una ronda de laberinto dura ~20 s (objetivo 60–120 s). ¿Mapa mayor con cámara que sigue al jugador, o rutas más largas?
-- Inclinación = XY de (g − g0): con el teléfono muy inclinado hacia ti, el eje Y pierde sensibilidad (factor cos del ángulo).
 - Fase 2: los valores de Config del anfitrión deben viajar con el inicio de ronda o los mapas diferirán entre peers.
 - Espiral con personajes de 40 px: ~1200 px de diámetro, no cabe en 1080 → cámara que sigue (fase 4).
 
@@ -23,4 +26,4 @@
 - Permisos a marcar en el preset: `INTERNET` y `VIBRATE` (hoy el preset solo tiene INTERNET).
 
 ## Tests
-- `godot --headless --path . -s res://tests/test_maze.gd` (500 semillas) y `test_spiral.gd` (200 semillas).
+- `godot --headless --path . -s res://tests/test_maze.gd` (500 semillas), `test_spiral.gd` (200) y `test_tilt.gd`.

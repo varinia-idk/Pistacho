@@ -3,6 +3,7 @@ extends RigidBody2D
 
 signal hit(strength: float)
 signal fell
+signal dashed
 
 enum State { ALIVE, FALLING }
 
@@ -60,10 +61,19 @@ func setup(slot_value: int, color: Color, local: bool) -> void:
 	Config.changed.connect(_apply_config)
 
 
+## Godot suma los rebotes de ambos cuerpos (y la fricción usa el mínimo). Cada jugador aporta la mitad
+## de player_bounce; la pared aporta la diferencia hasta wall_bounce, restándola (absorbent) si es negativa.
 func _apply_config(_key: String) -> void:
 	linear_damp = Config.value("damping")
 	physics_material_override.friction = Config.value("friction")
-	physics_material_override.bounce = Config.value("player_bounce")
+	physics_material_override.bounce = Config.value("player_bounce") * 0.5
+
+
+static func configure_wall_material(wall: PhysicsMaterial) -> void:
+	var contribution := Config.value("wall_bounce") - Config.value("player_bounce") * 0.5
+	wall.absorbent = contribution < 0.0
+	wall.bounce = absf(contribution)
+	wall.friction = Config.value("friction")
 
 
 ## Paso de reglas comunes; lo llama GameMode.physics_step antes del paso físico.
@@ -75,11 +85,11 @@ func step(time: float) -> void:
 		teleport(respawn_at)
 		invuln_until = time + Config.value("invuln_time")
 		_set_layers(true)
-	var max_speed := Config.value("max_speed")
-	var boost := 0.0
-	if time < boost_until:
-		boost = Config.value("dash_speed") * (boost_until - time) / Config.value("dash_boost_time")
-	_speed_cap = max_speed + boost
+	# Durante el dash: sin amortiguación y con un tope de velocidad que cae al final (1 − p²).
+	var boosting := time < boost_until
+	var progress := 1.0 - (boost_until - time) / Config.value("dash_boost_time") if boosting else 1.0
+	linear_damp = 0.0 if boosting else Config.value("damping")
+	_speed_cap = Config.value("max_speed") + Config.value("dash_speed") * (1.0 - progress * progress)
 	if state == State.ALIVE:
 		apply_central_force(tilt * Config.value("tilt_accel") * mass)
 	_update_view()
@@ -91,10 +101,14 @@ func dash(time: float) -> bool:
 	var direction := tilt if tilt.length() > 0.15 else linear_velocity
 	if direction.length() < 0.001:
 		return false
-	apply_central_impulse(direction.normalized() * Config.value("dash_speed") * mass)
+	direction = direction.normalized()
+	# Anula la velocidad en contra antes del impulso: el dash también sirve para girar en seco.
+	var against := minf(linear_velocity.dot(direction), 0.0)
+	apply_central_impulse(direction * (Config.value("dash_speed") - against) * mass)
 	dash_ready_at = time + Config.value("dash_cooldown")
 	boost_until = time + Config.value("dash_boost_time")
 	_dashed = true
+	dashed.emit()
 	return true
 
 
@@ -161,6 +175,7 @@ func _update_view() -> void:
 	view.invulnerable = ghost or is_invulnerable()
 	var cooldown := Config.value("dash_cooldown")
 	view.dash_ready = clampf(1.0 - (dash_ready_at - clock) / cooldown, 0.0, 1.0)
+	view.boost = clampf((boost_until - clock) / Config.value("dash_boost_time"), 0.0, 1.0)
 	if linear_velocity.length() > 20.0:
 		view.heading = linear_velocity.normalized()
 	elif tilt.length() > 0.1:

@@ -2,6 +2,8 @@ extends RefCounted
 ## Inclinación local: Input.get_gravity() en móvil, flechas en escritorio.
 ## Nunca integra el giroscopio; solo lo usa para detectar el gesto de dash.
 
+const TiltMath = preload("res://scripts/input/tilt_math.gd")
+
 var raw_gravity := Vector3.ZERO
 var raw_gyro := Vector3.ZERO
 var value := Vector2.ZERO        ## Salida procesada y suavizada [-1, 1].
@@ -9,6 +11,7 @@ var g0 := Vector3(0.0, 0.0, -1.0)
 var calibrating := false
 var use_sensors := OS.has_feature("mobile")
 
+var _axes: Array[Vector3] = TiltMath.basis(Vector3(0.0, 0.0, -1.0))
 var _calibration_sum := Vector3.ZERO
 var _dash_pending := false
 var _armed := true
@@ -48,6 +51,7 @@ func end_calibration() -> void:
 	calibrating = false
 	if _calibration_sum.length() > 0.5:
 		g0 = _calibration_sum.normalized()
+		_axes = TiltMath.basis(g0)
 	value = Vector2.ZERO
 
 
@@ -67,32 +71,21 @@ func reset() -> void:
 func _from_gravity() -> Vector2:
 	if raw_gravity.length() < 1.0:
 		return Vector2.ZERO
-	var d := raw_gravity.normalized() - g0
-	var v := Vector2(d.x, d.y)
+	# Componentes de (g − g0) en el plano tangente a g0 (ver tilt_math.gd).
+	var v := TiltMath.project(raw_gravity.normalized(), _axes)
 	if Config.flag("swap_xy"):
 		v = Vector2(v.y, v.x)
 	if Config.flag("invert_x"):
 		v.x = -v.x
 	if Config.flag("invert_y"):
 		v.y = -v.y
-	return curve(v)
+	return TiltMath.shape(v, sin(deg_to_rad(Config.value("dead_zone_deg"))), sin(deg_to_rad(Config.value("saturation_deg"))), Config.value("response_exp"))
 
 
 func _from_keys() -> Vector2:
 	return Vector2(
 		float(Input.is_physical_key_pressed(KEY_RIGHT)) - float(Input.is_physical_key_pressed(KEY_LEFT)),
 		float(Input.is_physical_key_pressed(KEY_DOWN)) - float(Input.is_physical_key_pressed(KEY_UP))).limit_length(1.0)
-
-
-## Zona muerta y saturación como sin(ángulo); curva radial pow(t, response_exp).
-static func curve(v: Vector2) -> Vector2:
-	var dead := sin(deg_to_rad(Config.value("dead_zone_deg")))
-	var full := sin(deg_to_rad(Config.value("saturation_deg")))
-	var magnitude := v.length()
-	if magnitude <= dead or full <= dead:
-		return Vector2.ZERO
-	var t := clampf((magnitude - dead) / (full - dead), 0.0, 1.0)
-	return v / magnitude * pow(t, Config.value("response_exp"))
 
 
 func _detect_dash(delta: float) -> void:

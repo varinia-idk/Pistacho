@@ -102,6 +102,7 @@ func _start_round() -> void:
 		if slot == local_slot:
 			player.hit.connect(_on_local_hit)
 			player.fell.connect(_vibrate.bind(120))
+			player.dashed.connect(_vibrate.bind(30))
 		elif mode.uses_bots():
 			bots.append(Bot.new(slot, _rng.randi()))
 	tilt.reset()
