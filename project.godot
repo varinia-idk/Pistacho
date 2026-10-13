@@ -11,9 +11,10 @@ config_version=5
 [application]
 
 config/name="Pistacho"
-config/description="Pistacho: party game 2D por inclinación para Android (Godot 4.7.2)."
-config/version="0.2.0"
+config/description="Pistacho: party game 2D por inclinación para Android."
+config/version="0.1.0"
 run/main_scene="res://scenes/main.tscn"
+config/quit_on_go_back=false
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://assets/branding/pistacho.svg"
 

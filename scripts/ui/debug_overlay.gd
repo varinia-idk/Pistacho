@@ -1,5 +1,5 @@
 extends CanvasLayer
-## Overlay de debug: un HSlider por clave de Config, generado automáticamente, y lecturas en vivo.
+## Overlay de ajustes finos (solo en el editor): un HSlider por clave de Config y lecturas en vivo.
 
 var root := Control.new()
 var panel := PanelContainer.new()
@@ -17,7 +17,9 @@ func _init(theme: Theme) -> void:
 	var toggle := Button.new()
 	toggle.text = "DBG"
 	toggle.focus_mode = Control.FOCUS_NONE
-	toggle.position = Vector2(12.0, 12.0)
+	toggle.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	toggle.offset_left = 12.0
+	toggle.offset_top = -72.0
 	toggle.custom_minimum_size = Vector2(84.0, 60.0)
 	toggle.add_theme_font_size_override("font_size", 22)
 	toggle.pressed.connect(_toggle)
@@ -25,9 +27,9 @@ func _init(theme: Theme) -> void:
 	panel.visible = false
 	panel.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
 	panel.offset_left = 12.0
-	panel.offset_top = 84.0
+	panel.offset_top = 130.0
 	panel.offset_right = 860.0
-	panel.offset_bottom = -12.0
+	panel.offset_bottom = -84.0
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.04, 0.06, 0.09, 0.92)
 	style.set_content_margin_all(12.0)

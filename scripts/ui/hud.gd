@@ -1,314 +1,303 @@
 extends CanvasLayer
-## Menú, sala, HUD y resultados. Lee el estado de Game y Net en cada frame.
+## HUD de partida: pausa, ronda y tiempo, marcador, dash, cuenta atrás, avisos, resultados y ganador.
+
+const Style = preload("res://scripts/ui/style.gd")
+const Widgets = preload("res://scripts/ui/widgets.gd")
 
 var root := Control.new()
-var menu := VBoxContainer.new()
-var ip_edit := LineEdit.new()
-var menu_status := Label.new()
-var lobby := VBoxContainer.new()
-var lobby_info := Label.new()
-var lobby_roster: Array[Label] = []
-var start_button: Button
-var lobby_leave: Button
-var lobby_wait := Label.new()
-var top_label := Label.new()
-var banner_label := Label.new()
-var score_labels: Array[Label] = []
-var center_label := Label.new()
-var message_label := Label.new()
-var item_button := Button.new()
-var status := StatusIcons.new()
-var results := PanelContainer.new()
-var results_label := Label.new()
-var results_buttons := HBoxContainer.new()
-var rematch_button: Button
-var back_button: Button
-
-
-## Íconos del jugador local: recarga del dash y efectos activos.
-class StatusIcons extends Control:
-	var dash_ready := 1.0
-	var shielded := false
-	var falling := false
-
-	func _draw() -> void:
-		var font := ThemeDB.fallback_font
-		var c := Vector2(44.0, 44.0)
-		draw_circle(c, 40.0, Color(1, 1, 1, 0.12), true, -1.0, true)
-		var sector := PackedVector2Array([c])
-		for k in 33:
-			sector.append(c + Vector2.from_angle(-PI / 2.0 + TAU * dash_ready * k / 32.0) * 40.0)
-		if dash_ready > 0.01:
-			draw_colored_polygon(sector, Color(1, 1, 1, 0.85 if dash_ready >= 1.0 else 0.35))
-		draw_string(font, c + Vector2(-34.0, 8.0), "DASH", HORIZONTAL_ALIGNMENT_CENTER, 68.0, 20, Color(0.05, 0.08, 0.12))
-		var x := 120.0
-		if shielded:
-			var shield := PackedVector2Array([Vector2(x, 10), Vector2(x + 30, 20), Vector2(x + 26, 56), Vector2(x, 76), Vector2(x - 26, 56), Vector2(x - 30, 20)])
-			draw_colored_polygon(shield, Color(0.7, 0.95, 1.0, 0.9))
-			x += 76.0
-		if falling:
-			draw_colored_polygon(PackedVector2Array([Vector2(x - 26, 30), Vector2(x + 26, 30), Vector2(x, 70)]), Color(1.0, 0.5, 0.12))
-			draw_rect(Rect2(x - 9, 8, 18, 24), Color(1.0, 0.5, 0.12))
+var top := Control.new()
+var round_label := Style.label("", "")
+var banner := PanelContainer.new()
+var banner_label := Style.label("", "")
+var board := PanelContainer.new()
+var score_names: Array[Label] = []
+var score_points: Array[Label] = []
+var gauge := Widgets.DashGauge.new()
+var countdown := Style.label("", "Title")
+var hint := Style.label("", "Muted")
+var results := CenterContainer.new()
+var results_body := VBoxContainer.new()
+var results_footer := Style.label("", "Muted")
+var pause_panel := CenterContainer.new()
+var pause_note := Style.label("", "Muted")
 
 
 func _init(theme: Theme) -> void:
+	layer = 4
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	root.theme = theme
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(root)
-	_build_menu()
-	_build_lobby()
-	top_label.position = Vector2(110.0, 16.0)
-	root.add_child(top_label)
-	banner_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	banner_label.offset_top = 16.0
-	banner_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	banner_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
-	root.add_child(banner_label)
-	var scores := VBoxContainer.new()
-	scores.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	scores.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	scores.offset_left = -260.0
-	scores.offset_top = 16.0
-	scores.offset_right = -20.0
-	root.add_child(scores)
-	for slot in Game.SLOTS:
-		var label := Label.new()
-		label.add_theme_color_override("font_color", Game.COLORS[slot])
-		scores.add_child(label)
-		score_labels.append(label)
-	for label: Label in [center_label, message_label]:
+	_build_top()
+	_build_board()
+	gauge.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	gauge.offset_left = -210.0
+	gauge.offset_top = -210.0
+	gauge.offset_right = -40.0
+	gauge.offset_bottom = -40.0
+	root.add_child(gauge)
+	for label: Label in [countdown, hint]:
 		label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		label.add_theme_color_override("font_outline_color", Color.BLACK)
-		label.add_theme_constant_override("outline_size", 12)
+		label.add_theme_color_override("font_outline_color", Color(Style.INK, 0.9))
+		label.add_theme_constant_override("outline_size", 18)
 		root.add_child(label)
-	center_label.add_theme_font_size_override("font_size", 160)
-	message_label.offset_top = 260.0
-	status.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	status.offset_left = -250.0
-	status.offset_top = -380.0
-	status.offset_right = -20.0
-	status.offset_bottom = -290.0
-	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(status)
-	item_button.text = "Sin ítem"
-	item_button.disabled = true
-	item_button.focus_mode = Control.FOCUS_NONE
-	item_button.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	item_button.offset_left = -250.0
-	item_button.offset_top = -250.0
-	item_button.offset_right = -30.0
-	item_button.offset_bottom = -30.0
-	item_button.pressed.connect(Game.request_action.bind(Game.Action.ITEM))
-	root.add_child(item_button)
+	countdown.add_theme_font_size_override("font_size", 240)
+	hint.offset_top = 300.0
+	hint.add_theme_font_size_override("font_size", 34)
 	_build_results()
+	_build_pause()
+	Game.phase_changed.connect(_on_phase)
 
 
-func _button(text: String, width: float, action: Callable) -> Button:
-	var button := Button.new()
-	button.text = text
-	button.custom_minimum_size = Vector2(width, 110.0)
-	button.focus_mode = Control.FOCUS_NONE
-	button.pressed.connect(action)
-	return button
+func _build_top() -> void:
+	top.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	top.offset_bottom = 120.0
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(top)
+	var pause := Style.button("II", false, 88.0)
+	pause.custom_minimum_size = Vector2(88.0, 88.0)
+	pause.position = Vector2(24.0, 18.0)
+	pause.pressed.connect(toggle_pause)
+	top.add_child(pause)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top.add_child(center)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 10)
+	center.add_child(column)
+	var pill := PanelContainer.new()
+	pill.theme_type_variation = "Pill"
+	pill.add_child(round_label)
+	column.add_child(pill)
+	banner.theme_type_variation = "Pill"
+	banner.add_theme_stylebox_override("panel", _pill_box(Color(Style.WARN, 0.92)))
+	banner_label.add_theme_color_override("font_color", Style.INK)
+	banner.add_child(banner_label)
+	column.add_child(banner)
 
 
-func _centered_column(box: VBoxContainer) -> void:
-	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 22)
-	root.add_child(box)
-
-
-func _add_centered(box: VBoxContainer, item: Control) -> void:
-	item.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	if item is Label:
-		(item as Label).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(item)
-
-
-func _build_menu() -> void:
-	_centered_column(menu)
-	var title := Label.new()
-	title.text = "Pistacho"
-	title.add_theme_font_size_override("font_size", 110)
-	var subtitle := Label.new()
-	subtitle.text = "Inclina el teléfono. Domina la inercia."
-	var join_row := HBoxContainer.new()
-	join_row.add_theme_constant_override("separation", 16)
-	ip_edit.placeholder_text = "IP del anfitrión"
-	ip_edit.text = Net.last_ip
-	ip_edit.custom_minimum_size = Vector2(380.0, 110.0)
-	ip_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	join_row.add_child(ip_edit)
-	join_row.add_child(_button("Unirse", 220.0, _on_join))
-	var hint := Label.new()
-	hint.text = "Escritorio: flechas = inclinar · Espacio = dash · E = ítem"
-	hint.modulate = Color(1, 1, 1, 0.6)
-	menu_status.add_theme_color_override("font_color", Color(1.0, 0.7, 0.4))
-	for item: Control in [title, subtitle, _button("Jugar contra bots", 620.0, _on_play_bots),
-			_button("Crear sala", 620.0, _on_create), join_row, menu_status, hint]:
-		_add_centered(menu, item)
-
-
-func _build_lobby() -> void:
-	_centered_column(lobby)
-	var title := Label.new()
-	title.text = "Sala"
-	title.add_theme_font_size_override("font_size", 90)
-	_add_centered(lobby, title)
-	_add_centered(lobby, lobby_info)
+func _build_board() -> void:
+	board.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	board.offset_left = -330.0
+	board.offset_top = 20.0
+	board.offset_right = -24.0
+	var box := Style.card_box(Color(Style.PANEL, 0.85))
+	box.content_margin_left = 22.0
+	box.content_margin_right = 22.0
+	box.content_margin_top = 16.0
+	box.content_margin_bottom = 16.0
+	board.add_theme_stylebox_override("panel", box)
+	root.add_child(board)
+	var rows := VBoxContainer.new()
+	rows.add_theme_constant_override("separation", 8)
+	board.add_child(rows)
 	for slot in Game.SLOTS:
-		var label := Label.new()
-		label.add_theme_color_override("font_color", Game.COLORS[slot])
-		lobby_roster.append(label)
-		_add_centered(lobby, label)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 30)
-	start_button = _button("Comenzar", 360.0, Game.start_match)
-	lobby_leave = _button("Salir", 360.0, _on_leave)
-	row.add_child(start_button)
-	row.add_child(lobby_leave)
-	_add_centered(lobby, row)
-	lobby_wait.text = "Esperando a que el anfitrión comience…"
-	lobby_wait.modulate = Color(1, 1, 1, 0.7)
-	_add_centered(lobby, lobby_wait)
+		var name_label := Style.label("", "", HORIZONTAL_ALIGNMENT_LEFT)
+		name_label.custom_minimum_size.x = 150.0
+		name_label.add_theme_font_size_override("font_size", 26)
+		var points := Style.label("", "Accent", HORIZONTAL_ALIGNMENT_RIGHT)
+		points.custom_minimum_size.x = 50.0
+		score_names.append(name_label)
+		score_points.append(points)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
+		row.add_child(Widgets.Ball.new(Game.COLORS[slot], 40.0))
+		row.add_child(name_label)
+		row.add_child(points)
+		rows.add_child(row)
 
 
 func _build_results() -> void:
-	results.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	results.offset_left = -420.0
-	results.offset_right = 420.0
-	results.offset_top = -300.0
-	results.offset_bottom = 300.0
-	var box := VBoxContainer.new()
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 24)
-	results.add_child(box)
-	results_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(results_label)
-	results_buttons.alignment = BoxContainer.ALIGNMENT_CENTER
-	results_buttons.add_theme_constant_override("separation", 30)
-	box.add_child(results_buttons)
-	rematch_button = _button("Revancha", 300.0, Game.start_match)
-	back_button = _button("Menú", 300.0, _on_back)
-	results_buttons.add_child(rematch_button)
-	results_buttons.add_child(back_button)
+	results.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(results)
+	var card := PanelContainer.new()
+	card.custom_minimum_size.x = 860.0
+	results.add_child(card)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 18)
+	card.add_child(column)
+	results_body.add_theme_constant_override("separation", 14)
+	column.add_child(results_body)
+	column.add_child(results_footer)
 
 
-func _on_play_bots() -> void:
-	Net.leave()
-	Game.start_match()
+func _build_pause() -> void:
+	pause_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	pause_panel.visible = false
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_child(dim)
+	dim.visible = false
+	pause_panel.set_meta("dim", dim)
+	root.add_child(pause_panel)
+	var card := PanelContainer.new()
+	card.custom_minimum_size.x = 760.0
+	pause_panel.add_child(card)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 24)
+	card.add_child(column)
+	column.add_child(Style.label("Pausa", "Heading"))
+	column.add_child(pause_note)
+	var leave := Style.button("Salir de la partida", false, 340.0)
+	leave.pressed.connect(_leave_match)
+	var resume := Style.button("Continuar", true, 340.0)
+	resume.pressed.connect(toggle_pause)
+	column.add_child(_row([leave, resume]))
 
 
-func _on_create() -> void:
-	if Net.host() == OK:
-		Game.to_lobby()
+func _row(children: Array) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 22)
+	for child: Control in children:
+		row.add_child(child)
+	return row
 
 
-func _on_join() -> void:
-	Net.join(ip_edit.text)
+func _pill_box(color: Color) -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = color
+	box.set_corner_radius_all(999)
+	box.content_margin_left = 26.0
+	box.content_margin_right = 26.0
+	box.content_margin_top = 8.0
+	box.content_margin_bottom = 8.0
+	return box
 
 
-func _on_leave() -> void:
+## Pausa: offline detiene el juego; en red solo muestra opciones (la partida sigue para los demás).
+func toggle_pause() -> void:
+	var opening := not pause_panel.visible
+	pause_panel.visible = opening
+	(pause_panel.get_meta("dim") as Control).visible = opening
+	pause_note.text = "La partida sigue en marcha para los demás." if Net.online else "El juego está detenido."
+	get_tree().paused = opening and not Net.online
+
+
+func is_paused() -> bool:
+	return pause_panel.visible
+
+
+func _leave_match() -> void:
+	pause_panel.visible = false
+	(pause_panel.get_meta("dim") as Control).visible = false
+	get_tree().paused = false
 	Net.leave()
 	Game.to_menu()
 
 
-## Fin de partida: el anfitrión vuelve a la sala con todos; offline, al menú; un cliente sale.
-func _on_back() -> void:
-	if Net.online and Net.is_host():
-		Game.to_lobby()
-	else:
-		_on_leave()
+func _in_match() -> bool:
+	return Game.phase != Game.Phase.MENU and Game.phase != Game.Phase.LOBBY
 
 
 func _process(_delta: float) -> void:
-	var phase := Game.phase
-	var host := Net.is_host()
-	var in_match := phase != Game.Phase.MENU and phase != Game.Phase.LOBBY
-	menu.visible = phase == Game.Phase.MENU
-	lobby.visible = phase == Game.Phase.LOBBY
-	for node: CanvasItem in [top_label, item_button, status, score_labels[0].get_parent()]:
-		node.visible = in_match
-	results.visible = phase == Game.Phase.ROUND_END or phase == Game.Phase.MATCH_END
-	results_buttons.visible = phase == Game.Phase.MATCH_END
-	rematch_button.visible = host
-	back_button.text = "Sala" if Net.online and host else ("Salir" if Net.online else "Menú")
-	center_label.text = ""
-	message_label.text = ""
-	banner_label.text = ""
-	match phase:
-		Game.Phase.MENU:
-			menu_status.text = Net.status
-			return
-		Game.Phase.LOBBY:
-			_update_lobby(host)
-			return
-	if Game.mode == null:
+	visible = _in_match() and Game.mode != null
+	if not visible:
+		if pause_panel.visible:
+			toggle_pause()
 		return
-	for slot in Game.SLOTS:
-		score_labels[slot].text = "● %s  %d" % [Game.player_name(slot), Game.scores[slot]]
 	var cfg := Game.mode.cfg
 	var clock := maxf(0.0, cfg["round_time"] - Game.mode.time)
-	top_label.text = "Ronda %d/%d · %s · %d:%02d" % [Game.round_index + 1, Game.rounds_total, Game.mode.title(), floori(clock / 60.0), int(clock) % 60]
-	match phase:
-		Game.Phase.COUNTDOWN:
-			center_label.text = str(maxi(1, ceili(Game.phase_left)))
-			message_label.text = "Calibrando: sostén el teléfono cómodo y quieto" if Game.tilt.calibrating else "Prepárate"
-		Game.Phase.PLAYING:
-			if Game.mode.time < 1.0:
-				center_label.text = "¡YA!"
-			var collapse: float = cfg["collapse_start"] - Game.mode.time
-			if collapse > 0.0 and collapse < 5.0:
-				banner_label.text = "El suelo colapsa en %d…" % ceili(collapse)
-			elif collapse <= 0.0 and collapse > -3.0:
-				banner_label.text = "¡El suelo colapsa desde la salida!"
-		Game.Phase.ROUND_END:
-			results_label.text = _round_text()
-		Game.Phase.MATCH_END:
-			results_label.text = _match_text() + ("" if host else "\n\nEl anfitrión decide la revancha")
-	var me := Game.local_view()
-	if me:
-		status.dash_ready = me.dash_ready
-		status.shielded = me.invulnerable
-		status.falling = me.falling > 0.0
-		status.queue_redraw()
-
-
-func _update_lobby(host: bool) -> void:
-	var ips := Net.private_ipv4()
-	if host:
-		lobby_info.text = ("Tu IP: %s · puerto %d" % [" / ".join(ips), Net.PORT]) if not ips.is_empty() \
-			else "Sin IP de red local: conéctate a una Wi-Fi o activa el punto de acceso"
-	else:
-		lobby_info.text = "Conectado a la sala · ping %s" % ("%d ms" % Net.ping_ms if Net.ping_ms >= 0.0 else "—")
-	var mine := Net.my_slot()
+	round_label.text = "RONDA %d/%d  ·  %s  ·  %d:%02d" % [Game.round_index + 1, Game.rounds_total, Game.mode.title().to_upper(),
+		floori(clock / 60.0), int(clock) % 60]
 	for slot in Game.SLOTS:
-		var peer := Net.slot_peers[slot]
-		var who := "Bot" if peer == 0 else ("Anfitrión" if slot == 0 else "Jugador %d" % (slot + 1))
-		lobby_roster[slot].text = "● %d. %s%s" % [slot + 1, who, " (tú)" if slot == mine and peer != 0 else ""]
-	start_button.visible = host
-	lobby_wait.visible = not host
-	lobby_leave.text = "Cerrar sala" if host else "Salir"
+		score_names[slot].text = Game.player_name(slot)
+		score_points[slot].text = str(Game.scores[slot])
+	var me := Game.local_view()
+	gauge.visible = me != null
+	if me:
+		gauge.charge = me.dash_ready
+		gauge.shielded = me.invulnerable
+		gauge.queue_redraw()
+	_update_center(cfg)
+	results.visible = Game.phase == Game.Phase.ROUND_END or Game.phase == Game.Phase.MATCH_END
+	if Game.phase == Game.Phase.ROUND_END:
+		results_footer.text = "Siguiente ronda en %d…" % maxi(1, ceili(Game.phase_left))
 
 
-func _round_text() -> String:
-	var lines: Array[String] = ["Ronda %d" % (Game.round_index + 1), ""]
+func _update_center(cfg: Dictionary[String, float]) -> void:
+	var text := ""
+	hint.text = ""
+	match Game.phase:
+		Game.Phase.COUNTDOWN:
+			text = str(maxi(1, ceili(Game.phase_left)))
+			hint.text = "Sostén el teléfono cómodo y quieto" if Game.tilt.calibrating else "Prepárate"
+		Game.Phase.PLAYING:
+			if Game.mode.time < 0.8:
+				text = "¡YA!"
+	if text != countdown.text:
+		countdown.text = text
+		if text != "":
+			# Cada número aparece con un pequeño rebote.
+			countdown.pivot_offset = countdown.size * 0.5
+			countdown.scale = Vector2.ONE * 1.5
+			create_tween().tween_property(countdown, "scale", Vector2.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	var collapse: float = cfg["collapse_start"] - Game.mode.time
+	banner_label.text = ""
+	if Game.phase == Game.Phase.PLAYING:
+		if collapse > 0.0 and collapse < 5.0:
+			banner_label.text = "El suelo se hunde en %d…" % ceili(collapse)
+		elif collapse <= 0.0 and collapse > -3.0:
+			banner_label.text = "¡El suelo se hunde desde la salida!"
+	banner.visible = banner_label.text != ""
+
+
+func _on_phase(phase: Game.Phase) -> void:
+	if phase == Game.Phase.ROUND_END:
+		_fill_round()
+	elif phase == Game.Phase.MATCH_END:
+		_fill_match()
+
+
+func _clear_results() -> void:
+	for child in results_body.get_children():
+		child.queue_free()
+
+
+func _fill_round() -> void:
+	_clear_results()
+	results_body.add_child(Style.label("Ronda %d" % (Game.round_index + 1), "Heading"))
 	for place in Game.last_ranking.size():
 		var slot := Game.last_ranking[place]
-		lines.append("%d. %s   +%d   (%d)" % [place + 1, Game.player_name(slot), Game.POINTS[place], Game.scores[slot]])
-	lines.append("")
-	lines.append("Siguiente en %d…" % maxi(1, ceili(Game.phase_left)))
-	return "\n".join(lines)
+		results_body.add_child(_result_row(place + 1, slot, "+%d" % Game.POINTS[place], "%d pts" % Game.scores[slot]))
 
 
-func _match_text() -> String:
-	var lines: Array[String] = ["Fin de la partida", ""]
+func _fill_match() -> void:
+	_clear_results()
 	var order := Game.match_ranking()
+	results_body.add_child(_row([Widgets.Crown.new()]))
+	results_body.add_child(Style.label("¡Gana %s!" % Game.player_name(order[0]), "Heading"))
 	for place in order.size():
-		lines.append("%d. %s   %d pts" % [place + 1, Game.player_name(order[place]), Game.scores[order[place]]])
-	return "\n".join(lines)
+		results_body.add_child(_result_row(place + 1, order[place], "", "%d pts" % Game.scores[order[place]]))
+	var host := Net.is_host()
+	results_footer.text = "" if host else "El anfitrión decide si hay revancha."
+	var back := Style.button("Sala" if Net.online and host else ("Salir" if Net.online else "Menú"), false, 300.0)
+	back.pressed.connect(_after_match)
+	var buttons: Array = [back]
+	if host:
+		var again := Style.button("Revancha", true, 300.0)
+		again.pressed.connect(Game.start_match)
+		buttons.append(again)
+	results_body.add_child(_row(buttons))
+
+
+func _after_match() -> void:
+	if Net.online and Net.is_host():
+		Game.to_lobby()
+	else:
+		Net.leave()
+		Game.to_menu()
+
+
+func _result_row(place: int, slot: int, gained: String, total: String) -> HBoxContainer:
+	var name_label := Style.label(Game.player_name(slot), "", HORIZONTAL_ALIGNMENT_LEFT)
+	name_label.custom_minimum_size.x = 300.0
+	var gained_label := Style.label(gained, "Accent", HORIZONTAL_ALIGNMENT_RIGHT)
+	gained_label.custom_minimum_size.x = 90.0
+	var total_label := Style.label(total, "Muted", HORIZONTAL_ALIGNMENT_RIGHT)
+	total_label.custom_minimum_size.x = 130.0
+	return _row([Widgets.Medal.new(place), Widgets.Ball.new(Game.COLORS[slot], 52.0), name_label, gained_label, total_label])

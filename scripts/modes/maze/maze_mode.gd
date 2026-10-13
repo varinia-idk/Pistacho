@@ -3,12 +3,14 @@ extends "res://scripts/core/game_mode.gd"
 
 const MazeGen = preload("res://scripts/modes/maze/maze_generator.gd")
 const WALL_VISUAL := 4.0
-const FLOOR := Color(0.07, 0.11, 0.16)
-const ROOM := Color(0.11, 0.17, 0.24)
-const WALL := Color(0.86, 0.91, 0.95)
-const GOAL := Color(1.0, 0.8, 0.25)
-const WARN := Color(1.0, 0.5, 0.12)
-const HOLE_RIM := Color(0.2, 0.15, 0.12)
+const FLOOR := Color("10252d")
+const FLOOR_ALT := Color("132a33")
+const START := Color("67e4bc")
+const WALL := Color("ddf3ee")
+const GOAL := Color("fbd88c")
+const WARN := Color("ff9a5c")
+const HOLE_RIM := Color("1d3a44")
+const HOLE_DEEP := Color("08151a")
 
 var data: MazeGen.Data
 var cell := 72.0
@@ -315,17 +317,35 @@ func _process(_delta: float) -> void:
 
 
 func _draw() -> void:
-	draw_rect(map_rect(), FLOOR)
-	draw_rect(Rect2(Vector2.ZERO, Vector2(2, 2) * cell), ROOM)
-	draw_rect(Rect2(Vector2(data.cols - 2, data.rows - 2) * cell, Vector2(2, 2) * cell), ROOM.lerp(GOAL, 0.15))
+	var board := map_rect()
+	# Sombra del tablero y suelo en damero sutil.
+	draw_rect(board.grow(14.0), Color(0, 0, 0, 0.35))
+	draw_rect(board, FLOOR)
+	for y in data.rows:
+		for x in data.cols:
+			if (x + y) % 2 == 0:
+				draw_rect(Rect2(Vector2(x, y) * cell, Vector2.ONE * cell), FLOOR_ALT)
+	draw_rect(Rect2(Vector2.ZERO, Vector2(2, 2) * cell), Color(START, 0.1))
+	draw_rect(Rect2(Vector2(data.cols - 2, data.rows - 2) * cell, Vector2(2, 2) * cell), Color(GOAL, 0.12))
 	# Agujeros recortados al interior de su celda: lo dibujado es exactamente lo alcanzable.
+	# El núcleo negro es exactamente la zona de caída; los anillos de fuera solo dan profundidad.
 	for i: int in hole_centers:
 		var interior := Rect2(Vector2(data.cell_of(i)) * cell, Vector2.ONE * cell).grow(-thick * 0.5)
+		var core := hole_radius - 0.5 * player_radius
 		_draw_clipped_circle(hole_centers[i], hole_radius, interior, HOLE_RIM)
-		_draw_clipped_circle(hole_centers[i], hole_radius - 0.5 * player_radius, interior, Color.BLACK)
-	for i in range(0, segments.size(), 2):
-		var extend := (segments[i + 1] - segments[i]).normalized() * WALL_VISUAL * 0.5
-		draw_line(segments[i] - extend, segments[i + 1] + extend, WALL, WALL_VISUAL, true)
+		_draw_clipped_circle(hole_centers[i], lerpf(hole_radius, core, 0.5), interior, HOLE_RIM.darkened(0.45))
+		_draw_clipped_circle(hole_centers[i], core, interior, HOLE_DEEP)
+		_draw_clipped_circle(hole_centers[i], core * 0.6, interior, Color.BLACK)
+	# Paredes: sombra desplazada y trazo claro con extremos redondeados.
+	for pass_index in 2:
+		var offset := Vector2(3.0, 4.0) if pass_index == 0 else Vector2.ZERO
+		var color := Color(0, 0, 0, 0.4) if pass_index == 0 else WALL
+		var width := WALL_VISUAL + (2.0 if pass_index == 0 else 0.0)
+		for i in range(0, segments.size(), 2):
+			draw_line(segments[i] + offset, segments[i + 1] + offset, color, width, true)
+			draw_circle(segments[i] + offset, width * 0.5, color, true, -1.0, true)
+			draw_circle(segments[i + 1] + offset, width * 0.5, color, true, -1.0, true)
+	draw_rect(board.grow(WALL_VISUAL * 0.5), WALL, false, WALL_VISUAL + 2.0, true)
 
 
 func _draw_clipped_circle(center: Vector2, radius: float, clip: Rect2, color: Color) -> void:
@@ -339,13 +359,20 @@ func _draw_clipped_circle(center: Vector2, radius: float, clip: Rect2, color: Co
 
 func _draw_effects() -> void:
 	var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.006)
-	# Meta.
-	_effects.draw_circle(goal_point, goal_radius * (1.0 + 0.08 * pulse), Color(GOAL, 0.25), true, -1.0, true)
+	# Meta: halo que respira, rayos que giran y estrella con contorno.
+	for k in 3:
+		_effects.draw_circle(goal_point, goal_radius * (1.0 + 0.25 * k + 0.1 * pulse), Color(GOAL, 0.12), true, -1.0, true)
+	var spin := Time.get_ticks_msec() * 0.0008
+	for k in 8:
+		var a := spin + TAU * k / 8.0
+		_effects.draw_line(goal_point + Vector2.from_angle(a) * goal_radius * 0.9, goal_point + Vector2.from_angle(a) * goal_radius * 1.45,
+			Color(GOAL, 0.35), 4.0, true)
 	var star := PackedVector2Array()
 	for k in 10:
-		var r := goal_radius * (0.8 if k % 2 == 0 else 0.38)
+		var r := goal_radius * (0.82 if k % 2 == 0 else 0.4) * (1.0 + 0.05 * pulse)
 		star.append(goal_point + Vector2.from_angle(-PI / 2.0 + TAU * k / 10.0) * r)
 	_effects.draw_colored_polygon(star, GOAL)
+	_effects.draw_polyline(star + PackedVector2Array([star[0]]), GOAL.darkened(0.35), 3.0, true)
 	# Colapso: aviso naranja = exactamente las celdas que caerán; negro = ya colapsadas.
 	var front := collapse_front(0.0)
 	var warn_front := collapse_front(cfg["warn_time"])
