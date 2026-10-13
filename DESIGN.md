@@ -1,30 +1,29 @@
-# Pistacho — diseño (fase 1)
+# Pistacho — diseño (fases 1–2)
 
 ## Supuestos
-- Ejes: Godot reorienta los sensores a la pantalla (x derecha, y arriba), por eso `invert_y = 1` por defecto. Confirmar en el teléfono con el overlay.
-- Inclinación = componentes de (g − g0) en el plano tangente a g0, no XY crudas: las XY pierden sensibilidad por cos(ángulo de sujeción) (−29 % a 45°). Alabear sobre el eje propio del teléfono sigue midiendo menos: es física, no fórmula.
-- Curva radial con 1.5° / 15° / 1.25 (la spec pedía 2° / 25° / 1.6: a 10° solo daba 19 % de fuerza; tras prueba en móvil, demasiado tosco).
-- Rebote: Godot suma el de ambos cuerpos. `player_bounce` y `wall_bounce` son el rebote resultante; la pared resta (absorbent) cuando hace falta. Defaults: pared 0.3 (0.8 hacía ping-pong; 0.05 volvía trivial deslizarse), jugadores 0.6.
-- Dash: anula la velocidad en contra, impulso 550 px/s, sin amortiguación durante 0.45 s y tope que cae como 1 − p² (~165 px extra, antes ~56).
-- `user://config.json` guarda solo los valores cambiados + versión; cambiar defaults no queda tapado por guardados viejos.
-- Dash: durante el giro brusco la inclinación se congela en la de hace `dash_lookback` s; el gesto no desvía el impulso.
-- `maze_min_path` es relativo a la distancia Manhattan (P1 ≥ 1.3×), así sigue siendo alcanzable si cambia el radio.
-- Geometría del mapa = f(Config) sobre la base 1920×1080 menos HUD; nunca depende de la pantalla del dispositivo.
-- Ranking de ronda: llegada a la meta; el resto por distancia BFS restante (3/2/1/0).
-- Única asignación de posición: al crear el cuerpo, antes de entrar al árbol. Después solo `teleport()` en `_integrate_forces`.
-- Tras caer: fantasma (sin choques entre jugadores) mientras dura la invulnerabilidad.
-- Bots: constantes internas escaladas por `bot_skill`. Si llevan `bot_patience` s bloqueados, retroceden un tiempo aleatorio: ante humanos siempre; entre bots, el que va detrás (sin esto, atascos de hasta 58 s).
-- Tests: generadores puros sin autoloads (con `-s` los autoloads no existen al compilar; si un script falla, Godot no sale).
-- `addons/godot_mcp` queda como herramienta de editor; `dev_bridge.gd` lo excluye del APK.
+- Ejes: Godot reorienta los sensores a la pantalla (x derecha, y arriba) → `invert_y = 1` por defecto.
+- Inclinación = (g − g0) proyectada en el plano tangente a g0; las XY crudas pierden sensibilidad por cos(sujeción). Curva radial 1.5° / 15° / 1.25 (la spec pedía 2° / 25° / 1.6: tosco en móvil).
+- Rebote: Godot suma el de ambos cuerpos; `wall_bounce` (0.3) y `player_bounce` (0.6) son el resultado real (la pared resta con absorbent).
+- Dash: anula la velocidad en contra, 550 px/s, sin amortiguación 0.45 s; el gesto congela la inclinación previa.
+- `maze_min_path` relativo a la distancia Manhattan. Geometría = f(cfg de la ronda), nunca de la pantalla.
+- Única asignación de posición: al crear el cuerpo, antes de entrar al árbol; después solo `teleport()`.
+- Bots: si llevan `bot_patience` s bloqueados, retroceden un tiempo aleatorio; ante humanos siempre, entre bots el que va detrás.
+- `user://config.json` guarda solo valores cambiados + versión.
+- `addons/godot_mcp` es herramienta de editor; `dev_bridge.gd` lo excluye del APK.
+
+## Red (fase 2)
+- ENet en 7777, 3 clientes. Canales: 0 eventos/acciones fiables, 1 input, 2 estado: ENet retiene un canal tras un fiable perdido.
+- Sin throttle de ENet (descarta no fiables si sube la latencia); el estado pesa ~5 KB/s por cliente.
+- ROUND lleva modo + semilla + cfg completa del anfitrión: con otra cfg, la misma semilla da otro mapa.
+- Clientes: vistas interpolan (k = 15); saltan si el objetivo está a > 4 radios (reapariciones).
+- Input remoto sin llegar 0.3 s → cero. Peer caído (≤ 8 s) o que sale → su ranura pasa a bot sin parar la ronda.
+- Durante la partida la sala rechaza conexiones; `PROTOCOL` distinto → el cliente vuelve al menú.
 
 ## Dudas
-- Con bots, una ronda de laberinto dura ~20 s (objetivo 60–120 s). ¿Mapa mayor con cámara que sigue al jugador, o rutas más largas?
-- Fase 2: los valores de Config del anfitrión deben viajar con el inicio de ronda o los mapas diferirán entre peers.
-- Espiral con personajes de 40 px: ~1200 px de diámetro, no cabe en 1080 → cámara que sigue (fase 4).
+- Rondas de laberinto con bots ~18 s (objetivo 60–120 s): ¿mapa mayor con cámara que sigue o rutas más largas?
+- Sin predicción, los clientes sienten ida y vuelta + 33 ms + suavizado; el anfitrión juega con ventaja.
+- Espiral con personajes de 40 px no cabe en 1080 → cámara que sigue (fase 4).
 
-## Android
-- Permisos a marcar en el preset: `INTERNET` y `VIBRATE` (hoy el preset solo tiene INTERNET).
-
-## Tests
-- `godot --headless --path . -s res://tests/test_maze.gd` (500 semillas), `test_spiral.gd` (200) y `test_tilt.gd`.
-- `godot --headless --path . --fixed-fps 60 res://tests/sim_bots.tscn -- 15`: partida solo con bots; duración de rondas y parones.
+## Android y pruebas
+- Permisos del preset: `INTERNET` y `VIBRATE` (hoy solo INTERNET: no vibra).
+- `-s res://tests/test_maze.gd | test_spiral.gd | test_tilt.gd`; `res://tests/sim_bots.tscn -- 15` (con `--fixed-fps 60`); `sh tests/run_lan.sh` (LAN real en localhost).

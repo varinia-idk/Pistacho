@@ -35,9 +35,8 @@ func title() -> String:
 	return "Laberinto"
 
 
-func setup(_seed_value: int) -> void:
-	super(_seed_value)
-	var cfg := Config.snapshot()
+func setup(_seed_value: int, round_cfg: Dictionary[String, float]) -> void:
+	super(_seed_value, round_cfg)
 	player_radius = cfg["player_radius"]
 	thick = MazeGen.wall_thickness(cfg)
 	cell = MazeGen.cell_size(cfg)
@@ -119,7 +118,7 @@ func pass_point(i: int) -> Vector2:
 
 ## Frente del colapso en pasos BFS desde la salida; lead adelanta el aviso.
 func collapse_front(lead: float) -> float:
-	var reach := (time - Config.value("collapse_start") + lead) * Config.value("collapse_rate")
+	var reach := (time - cfg["collapse_start"] + lead) * cfg["collapse_rate"]
 	return minf(reach, float(dist_start[data.index(data.goal)] - 3))
 
 
@@ -127,7 +126,7 @@ func physics_step(delta: float) -> void:
 	super(delta)
 	var front := collapse_front(0.0)
 	# La reaparición se aplica tras la caída y debe seguir a salvo al acabar la invulnerabilidad.
-	var safe_front := collapse_front(Config.value("warn_time") + Config.value("fall_time") + Config.value("invuln_time"))
+	var safe_front := collapse_front(cfg["warn_time"] + cfg["fall_time"] + cfg["invuln_time"])
 	var fall_limit := hole_radius - 0.5 * player_radius
 	for player in players:
 		if player.state != Player.State.ALIVE:
@@ -182,7 +181,7 @@ func _track(slot: int, c: Vector2i) -> void:
 ## ~N celdas atrás en el historial, sin agujeros ni zonas de colapso.
 func _respawn_back(slot: int, safe_front: float) -> Vector2:
 	var trail: Array = history.get(slot, [])
-	var wanted := Config.count("respawn_back")
+	var wanted := roundi(cfg["respawn_back"])
 	var chosen := Vector2i(-1, -1)
 	var counted := 0
 	for k in range(trail.size() - 2, -1, -1):
@@ -349,7 +348,7 @@ func _draw_effects() -> void:
 	_effects.draw_colored_polygon(star, GOAL)
 	# Colapso: aviso naranja = exactamente las celdas que caerán; negro = ya colapsadas.
 	var front := collapse_front(0.0)
-	var warn_front := collapse_front(Config.value("warn_time"))
+	var warn_front := collapse_front(cfg["warn_time"])
 	if warn_front <= 0.0:
 		return
 	for i in dist_start.size():

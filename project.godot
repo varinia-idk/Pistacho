@@ -22,6 +22,7 @@ config/icon="res://assets/branding/pistacho.svg"
 MCPRuntime="*res://scripts/core/dev_bridge.gd"
 Config="*res://scripts/autoload/config.gd"
 Game="*res://scripts/autoload/game.gd"
+Net="*res://scripts/autoload/net.gd"
 
 [display]
 

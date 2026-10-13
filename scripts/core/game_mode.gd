@@ -6,12 +6,15 @@ const Player = preload("res://scripts/players/player.gd")
 
 var seed_value := 0
 var time := 0.0
+## Valores de Config del anfitrión para esta ronda; iguales en todos los peers.
+var cfg: Dictionary[String, float] = {}
 var players: Array[Player] = []
 
 
 ## Genera el mapa de forma determinista y construye lo visual (todos los peers).
-func setup(_seed_value: int) -> void:
+func setup(_seed_value: int, round_cfg: Dictionary[String, float]) -> void:
 	seed_value = _seed_value
+	cfg = round_cfg
 
 
 ## Colisiones y estado de reglas (solo anfitrión).
