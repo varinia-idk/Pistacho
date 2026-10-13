@@ -3,6 +3,6 @@
 /android/
 /build/
 /tests/output/
-/addons/godot_mcp/cache/
+/addons/godot_mcp/
 *.keystore
 .DS_Store
