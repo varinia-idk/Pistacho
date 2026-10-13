@@ -4,7 +4,7 @@
 - Ejes: Godot reorienta los sensores a la pantalla (x derecha, y arriba), por eso `invert_y = 1` por defecto. Confirmar en el teléfono con el overlay.
 - Inclinación = componentes de (g − g0) en el plano tangente a g0, no XY crudas: las XY pierden sensibilidad por cos(ángulo de sujeción) (−29 % a 45°). Alabear sobre el eje propio del teléfono sigue midiendo menos: es física, no fórmula.
 - Curva radial con 1.5° / 15° / 1.25 (la spec pedía 2° / 25° / 1.6: a 10° solo daba 19 % de fuerza; tras prueba en móvil, demasiado tosco).
-- Rebote: Godot suma el de ambos cuerpos. `player_bounce` y `wall_bounce` son el rebote resultante; la pared resta (absorbent) cuando hace falta. Medido: pared 0.05, jugadores 0.6.
+- Rebote: Godot suma el de ambos cuerpos. `player_bounce` y `wall_bounce` son el rebote resultante; la pared resta (absorbent) cuando hace falta. Defaults: pared 0.3 (0.8 hacía ping-pong; 0.05 volvía trivial deslizarse), jugadores 0.6.
 - Dash: anula la velocidad en contra, impulso 550 px/s, sin amortiguación durante 0.45 s y tope que cae como 1 − p² (~165 px extra, antes ~56).
 - `user://config.json` guarda solo los valores cambiados + versión; cambiar defaults no queda tapado por guardados viejos.
 - Dash: durante el giro brusco la inclinación se congela en la de hace `dash_lookback` s; el gesto no desvía el impulso.

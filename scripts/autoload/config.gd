@@ -31,7 +31,7 @@ const DEFAULTS := {
 	"damping": [1.0, 0.0, 6.0],
 	"friction": [0.1, 0.0, 1.0],
 	"player_bounce": [0.6, 0.0, 1.0],   # Rebote resultante entre jugadores.
-	"wall_bounce": [0.05, 0.0, 1.0],    # Rebote resultante contra paredes.
+	"wall_bounce": [0.3, 0.0, 1.0],     # Rebote resultante contra paredes.
 	# Partida
 	"rounds": [5, 1, 15],
 	"round_time": [120.0, 30.0, 300.0],
