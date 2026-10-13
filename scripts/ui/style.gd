@@ -15,7 +15,7 @@ const TEXT := Color("e8f6f3")
 const MUTED := Color("8fb3b5")
 const INK := Color("0b1c24")
 const WARN := Color("ff9a5c")
-const VERSION := "v0.1"
+const VERSION := "v0.1.1"
 
 
 static func build_theme() -> Theme:

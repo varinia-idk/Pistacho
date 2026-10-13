@@ -1,6 +1,6 @@
 extends Node
 ## Red LAN: ENet y RPCs manuales en este autoload, con la misma ruta en todos los peers.
-## Canales: 0 = eventos y acciones (fiables), 1 = input, 2 = estado. Van separados porque ENet
+## Canales: 0 = eventos (fiables), 1 = comandos de inclinación/dash, 2 = estado. Van separados porque ENet
 ## retiene en un canal todo lo posterior a un paquete fiable perdido: un evento no debe frenar el estado.
 
 signal roster_changed
@@ -9,7 +9,7 @@ enum Ev { ROSTER, ROUND, PHASE, VIBRATE }
 
 const PORT := 7777
 const MAX_CLIENTS := 3
-const PROTOCOL := 1             ## Subir si cambia el formato de los mensajes.
+const PROTOCOL := 2             ## Comandos por tick con redundancia y estado identificado por ronda/reaparición.
 const PEER_TIMEOUT_MIN_MS := 4000
 const PEER_TIMEOUT_MAX_MS := 8000  ## Un teléfono que deja de responder pasa a bot como mucho tras este tiempo.
 const THROTTLE_INTERVAL_MS := 5000  ## Valor por defecto de ENet; con aceleración y deceleración 0 no cambia.
@@ -151,12 +151,12 @@ func _process(_delta: float) -> void:
 
 # --- RPCs (spec §6) ---
 
-## seq numera los inputs del cliente: el anfitrión lo devuelve en el estado para la predicción.
+## Comandos recientes: inclinación XY y dash Z. Un comando se ejecuta una sola vez.
 @rpc("any_peer", "call_remote", "unreliable_ordered", 1)
-func send_input(tilt: Vector2, seq: int) -> void:
+func send_input(round_id: int, first_seq: int, commands: PackedVector3Array) -> void:
 	var slot := _sender_slot()
-	if slot > 0 and tilt.is_finite():
-		Game.remote_input(slot, tilt.limit_length(1.0), seq)
+	if slot > 0:
+		Game.remote_input(slot, round_id, first_seq, commands)
 
 
 @rpc("any_peer", "call_remote", "reliable", 0)
@@ -227,7 +227,7 @@ func _on_peer_disconnected(id: int) -> void:
 
 
 ## Tiempo de espera corto y sin el throttle de ENet, que descarta paquetes no fiables cuando la
-## latencia sube (Wi-Fi con altibajos): el estado pesa ~5 KB/s y perderlo se ve a saltos.
+## latencia sube (Wi-Fi con altibajos): el estado pesa ~13 KB/s y perderlo se ve a saltos.
 func _tune_peer(packet_peer: ENetPacketPeer) -> void:
 	packet_peer.set_timeout(0, PEER_TIMEOUT_MIN_MS, PEER_TIMEOUT_MAX_MS)
 	packet_peer.throttle_configure(THROTTLE_INTERVAL_MS, 0, 0)

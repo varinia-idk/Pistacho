@@ -37,6 +37,7 @@ func _init() -> void:
 				failures += 1
 				printerr("instantáneas (%s, %d fps): demasiado irregular o retrasado" % [net[0], fps])
 	failures += _check_teleport()
+	failures += _check_network_gap()
 	print("test_interp: %d fallos" % failures)
 	quit(1 if failures else 0)
 
@@ -128,5 +129,20 @@ func _check_teleport() -> int:
 	var middle := track.sample(0.04)[0]
 	if middle != 0.0:
 		printerr("teletransporte interpolado: x=%.0f" % middle)
+		return 1
+	return 0
+
+
+func _check_network_gap() -> int:
+	var track := Interp.Track.new()
+	track.snap_distance = 80.0
+	track.push(0.0, PackedFloat32Array([0, 0, 20, 0, 500, 0, 0, 1, 0, 0, 0]))
+	track.push(0.3, PackedFloat32Array([150, 0, 20, 0, 500, 0, 0, 1, 0, 18, 0]))
+	if not is_equal_approx(track.sample(0.15)[0], 75.0):
+		printerr("un hueco de red se interpretó como teletransporte")
+		return 1
+	track.push(0.4, PackedFloat32Array([170, 0, 20, 0, 0, 0, 0, 1, 0, 24, 1]))
+	if not is_equal_approx(track.sample(0.32)[0], 150.0):
+		printerr("una reaparición corta se interpoló")
 		return 1
 	return 0

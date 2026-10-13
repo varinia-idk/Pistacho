@@ -32,7 +32,9 @@ func _ready() -> void:
 	if role == "host":
 		expected = int(args[1])
 		Config.set_value("rounds", 1)
-		Net.host()
+		if Net.host() != OK:
+			get_tree().quit(1)
+			return
 		Game.to_lobby()
 		Net.roster_changed.connect(_on_roster)
 	else:

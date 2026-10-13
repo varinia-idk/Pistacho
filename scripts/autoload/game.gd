@@ -15,6 +15,7 @@ const PlayerView = preload("res://scripts/players/player_view.gd")
 const Bot = preload("res://scripts/players/bot.gd")
 const TiltReader = preload("res://scripts/input/tilt_reader.gd")
 const Interp = preload("res://scripts/core/interpolation.gd")
+const InputBuffer = preload("res://scripts/core/input_buffer.gd")
 ## Un modo nuevo = una escena más aquí; las rondas alternan en este orden.
 const MODE_SCENES: Array[String] = ["res://scenes/modes/maze.tscn"]
 const COLORS: Array[Color] = [Color("ff5a36"), Color("3fa9f5"), Color("ffd60a"), Color("c56bff")]
@@ -25,7 +26,6 @@ const CALIBRATION := 1.5    ## Últimos segundos de la cuenta en los que se prom
 const ROUND_END_TIME := 3.0
 const INPUT_TIMEOUT := 0.3  ## Sin input remoto durante este tiempo, la inclinación vuelve a cero.
 const HISTORY := 256        ## Inputs predichos que recuerda un cliente (~4 s a 60 Hz).
-const CORRECTION_RATE := 12.0  ## Las correcciones de la predicción se disuelven visualmente a este ritmo.
 
 var phase := Phase.MENU
 var phase_left := 0.0
@@ -47,7 +47,7 @@ var _sim_clock := 0.0                  ## Anfitrión: tiempo de simulación, va 
 var _clock := Interp.Clock.new()       ## Cliente: reloj del anfitrión y retardo de dibujo.
 var _tracks: Array = []                ## Cliente: Interp.Track por ranura.
 var _time_track := Interp.Track.new()  ## Cliente: tiempo del modo.
-var _last_seq: Array[int] = [0, 0, 0, 0]     ## Anfitrión: último input recibido por ranura.
+var _remote_inputs: Array = []             ## Anfitrión: un InputBuffer por ranura.
 var _seq_in_step: Array[int] = [0, 0, 0, 0]  ## Anfitrión: input usado en el paso físico en curso.
 var _seq_done: Array[int] = [0, 0, 0, 0]     ## Anfitrión: input ya reflejado en las posiciones.
 var _predicted: Player = null          ## Cliente: su propia bola, simulada al instante (net_predict).
@@ -57,6 +57,9 @@ var _reconciled := 0
 var _server_fields := PackedFloat32Array()  ## Cliente: último estado del anfitrión para su bola.
 var _predict_clock := 0.0
 var correction_max := 0.0              ## Diagnóstico: mayor corrección reciente de la predicción, px.
+var _commands := PackedVector3Array()
+var _dash_pending := false
+var _server_teleport := 0
 
 
 func _ready() -> void:
@@ -116,9 +119,10 @@ func request_action(kind: Action) -> void:
 	if Net.is_host():
 		action(local_slot, kind)
 	elif phase == Phase.PLAYING:
-		Net.send_action.rpc_id(1, kind)
-		if kind == Action.DASH and _predicted:
-			_predicted.dash(_predict_clock)
+		if kind == Action.DASH:
+			_dash_pending = true  # En el mismo comando/tick que la inclinación, en ambos equipos.
+		else:
+			Net.send_action.rpc_id(1, kind)
 
 
 func set_input(slot: int, value: Vector2) -> void:
@@ -126,11 +130,10 @@ func set_input(slot: int, value: Vector2) -> void:
 		players[slot].tilt = value.limit_length(1.0)
 
 
-func remote_input(slot: int, value: Vector2, seq: int) -> void:
-	if phase == Phase.PLAYING and seq > _last_seq[slot]:
-		set_input(slot, value)
+func remote_input(slot: int, round_id: int, first_seq: int, commands: PackedVector3Array) -> void:
+	if phase == Phase.PLAYING and round_id == round_index and slot < _remote_inputs.size():
+		_remote_inputs[slot].push(first_seq, commands)
 		_input_age[slot] = 0.0
-		_last_seq[slot] = seq
 
 
 func action(slot: int, kind: Action) -> void:
@@ -151,6 +154,11 @@ func peer_left(slot: int) -> void:
 
 
 func _start_round() -> void:
+	_remote_inputs.clear()
+	_seq_in_step.fill(0)
+	_seq_done.fill(0)
+	for slot in SLOTS:
+		_remote_inputs.append(InputBuffer.new())
 	var mode_index := round_index % MODE_SCENES.size()
 	var seed_value := _rng.randi()
 	var cfg := Config.snapshot()
@@ -230,7 +238,6 @@ func _physics_process(delta: float) -> void:
 func _play_step(delta: float) -> void:
 	# Las posiciones que se envían al final de este tick son del paso anterior: su input es _seq_in_step.
 	_seq_done = _seq_in_step.duplicate()
-	_seq_in_step = _last_seq.duplicate()
 	if local_slot >= 0:
 		set_input(local_slot, tilt.value)
 		if tilt.consume_dash():
@@ -238,8 +245,14 @@ func _play_step(delta: float) -> void:
 	for slot in SLOTS:
 		if Net.is_remote_human(slot):
 			_input_age[slot] += delta
+			var buffer: InputBuffer = _remote_inputs[slot]
+			var command := buffer.advance()
+			set_input(slot, Vector2(command.x, command.y))
+			_seq_in_step[slot] = buffer.sequence
 			if _input_age[slot] > INPUT_TIMEOUT:
 				players[slot].tilt = Vector2.ZERO
+			elif command.z > 0.5:
+				action(slot, Action.DASH)
 	for slot: int in bots:
 		bots[slot].think(mode, players[slot], delta)
 	mode.physics_step(delta)
@@ -273,15 +286,15 @@ func _set_phase(value: Phase, duration: float = 0.0) -> void:
 	phase_changed.emit(phase)
 
 
-## [reloj de simulación, tiempo del modo] y, por ranura, slot + PlayerView.STATE_FIELDS valores.
+## [reloj de simulación, tiempo del modo, ronda] y, por ranura, slot + PlayerView.STATE_FIELDS valores.
 func _pack_state() -> PackedFloat32Array:
-	var data := PackedFloat32Array([_sim_clock, mode.time])
+	var data := PackedFloat32Array([_sim_clock, mode.time, round_index])
 	for player in players:
 		var view := player.view
 		data.append_array([player.slot, player.position.x, player.position.y, player.radius,
 			PlayerView.FLAG_SHIELD if view.invulnerable else 0,
 			player.linear_velocity.x, player.linear_velocity.y, view.falling, view.dash_ready, view.boost,
-			_seq_done[player.slot]])
+			_seq_done[player.slot], player.teleport_id])
 	return data
 
 
@@ -326,7 +339,6 @@ func client_round(args: Array) -> void:
 			_predicted.setup(slot, COLORS[slot], true, cfg)
 			_predicted.position = spawns[slot]  # Aún fuera del espacio físico.
 			mode.add_child(_predicted)
-			_predicted.view.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 			views.append(_predicted.view)
 			continue
 		var view := PlayerView.new()
@@ -338,7 +350,12 @@ func client_round(args: Array) -> void:
 		mode.add_child(view)
 		views.append(view)
 	_history.clear()
-	_reconciled = _input_seq
+	_input_seq = 0
+	_reconciled = 0
+	_predict_clock = 0.0
+	_commands.clear()
+	_dash_pending = false
+	_server_teleport = 0
 	_server_fields = PackedFloat32Array()
 	_clock.reset()
 	_time_track = Interp.Track.new()
@@ -368,14 +385,16 @@ func client_phase(args: Array) -> void:
 
 func apply_state(data: PackedFloat32Array) -> void:
 	var stride := 1 + PlayerView.STATE_FIELDS
-	if Net.is_host() or mode == null or _tracks.size() < SLOTS or data.size() < 2 + SLOTS * stride:
+	if Net.is_host() or mode == null or _tracks.size() < SLOTS or data.size() != 3 + SLOTS * stride:
+		return
+	if int(data[2]) != round_index or (not _time_track.is_empty() and data[0] <= _time_track.newest()):
 		return
 	var server_time := data[0]
 	_clock.observe(server_time, Time.get_ticks_usec() / 1e6, 1.0 / mode.cfg["net_state_hz"],
 		Config.value("net_delay_min"), Config.value("net_delay_max"))
 	_time_track.push(server_time, PackedFloat32Array([data[1]]))
 	for i in SLOTS:
-		var base := 2 + i * stride
+		var base := 3 + i * stride
 		var slot := int(data[base])
 		if slot < 0 or slot >= SLOTS:
 			continue
@@ -394,6 +413,12 @@ func _reconcile(fields: PackedFloat32Array) -> void:
 	var server_velocity := Vector2(fields[4], fields[5])
 	var falling := fields[6] > 0.0
 	_predicted.hold(falling)
+	if int(fields[10]) != _server_teleport:
+		_server_teleport = int(fields[10])
+		_predicted.teleport(server_position)
+		_history.clear()
+		_reconciled = int(fields[9])
+		return
 	if falling:
 		_history.clear()
 		return
@@ -418,11 +443,6 @@ func _reconcile(fields: PackedFloat32Array) -> void:
 		return
 	_predicted.correct(error, velocity_error)
 	correction_max = maxf(correction_max, error.length())
-	if error.length() <= _predicted.radius * 4.0:
-		_predicted.view.position -= error  # Se ve donde estaba y converge suave.
-	else:
-		_predicted.view.position = Vector2.ZERO
-		_history.clear()
 
 
 ## Cliente: todo se dibuja en el mismo instante pasado del anfitrión, entre dos estados conocidos.
@@ -436,7 +456,6 @@ func _process(delta: float) -> void:
 			views[slot].apply_fields(_tracks[slot].sample(moment))
 	if _predicted:
 		var view := _predicted.view
-		view.position = view.position.lerp(Vector2.ZERO, 1.0 - exp(-CORRECTION_RATE * delta))
 		if not _server_fields.is_empty():
 			# Caídas y escudo los decide el anfitrión.
 			view.falling = _server_fields[6]
@@ -458,13 +477,18 @@ func _client_step(delta: float) -> void:
 		_history[_input_seq] = PackedVector2Array([_predicted.predicted_position(), _predicted.predicted_velocity()])
 		_history.erase(_input_seq - HISTORY)
 	_input_seq += 1
-	Net.send_input.rpc_id(1, tilt.value, _input_seq)
+	var dash := tilt.consume_dash() or _dash_pending
+	_dash_pending = false
+	_commands.append(Vector3(tilt.value.x, tilt.value.y, 1.0 if dash else 0.0))
+	if _commands.size() > InputBuffer.REDUNDANCY:
+		_commands.remove_at(0)
+	Net.send_input.rpc_id(1, round_index, _input_seq - _commands.size() + 1, _commands)
 	if _predicted:
 		_predict_clock += delta
 		_predicted.tilt = tilt.value
+		if dash:
+			_predicted.dash(_predict_clock)
 		_predicted.step(_predict_clock)
-	if tilt.consume_dash():
-		request_action(Action.DASH)
 
 
 func _unhandled_input(event: InputEvent) -> void:

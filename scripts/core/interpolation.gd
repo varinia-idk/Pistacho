@@ -100,7 +100,10 @@ class Track:
 		var a := frames[i]
 		var b := frames[i + 1]
 		var t := (time - times[i]) / (times[i + 1] - times[i])
-		if a.size() > 1 and Vector2(a[0], a[1]).distance_to(Vector2(b[0], b[1])) > snap_distance:
+		# El estado de red identifica reapariciones. Un hueco de Wi-Fi o un dash largo no son un teletransporte.
+		var teleport := int(a[10]) != int(b[10]) if a.size() > 10 else (
+			a.size() > 1 and Vector2(a[0], a[1]).distance_to(Vector2(b[0], b[1])) > snap_distance)
+		if teleport:
 			return b if t >= 0.5 else a
 		var result := PackedFloat32Array()
 		result.resize(a.size())

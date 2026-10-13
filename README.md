@@ -1,8 +1,10 @@
-# Pistacho v0.1.0
+# Pistacho v0.1.1
 
 Party game 2D para Android en Godot 4.7.2: hasta 4 jugadores inclinan el teléfono para mover bolas con inercia. Ver `DESIGN.md` para supuestos y dudas abiertas.
 
-**Versión actual: v0.1.0** — modo Laberinto, control por inclinación y dash, bots y red LAN para hasta 4 jugadores. Los bots ocupan los huecos libres. Esta versión reinicia la numeración tras la reescritura; la antigua v0.1.2 se conserva en la rama `legacy` y en la etiqueta `v0.1.2-legacy`.
+**Versión actual: v0.1.1** — modo Laberinto, control por inclinación y dash, bots y red LAN para hasta 4 jugadores. Los bots ocupan los huecos libres. La numeración se reinició en v0.1.0 tras la reescritura; la antigua v0.1.2 se conserva en la rama `legacy` y en la etiqueta `v0.1.2-legacy`.
+
+La v0.1.1 corrige los tirones de la bola del cliente y permite escribir puntos en el campo IP móvil. **Actualiza todos los dispositivos de la sala**: esta versión usa el protocolo LAN 2 y no es compatible con la v0.1.0.
 
 Incluye inicio con fondo animado, Unirse, Sala con IP visible, Ajustes y Cómo jugar. Durante la partida hay marcador, ronda y tiempo, cuenta atrás, indicador de dash, pausa, resultados con medallas y ganador con corona. El modo Montaña/Espiral aún no es jugable: solo está implementado y probado su generador.
 
@@ -21,12 +23,12 @@ Importa `project.godot` en **Godot 4.7.2** y ejecuta la escena principal. No nec
 ## Estructura
 ```text
 scripts/autoload/   Config (números ajustables), Net (sala y RPCs) y Game (rondas, puntos, input, bots)
-scripts/core/       GameMode (base de los modos), interpolación de red y puente del MCP de editor
+scripts/core/       GameMode, interpolación de red, cola de comandos por tick y puente opcional del editor
 scripts/input/      Lectura de inclinación y gesto de dash
 scripts/players/    Jugador (RigidBody2D), vista y bot
 scripts/modes/      maze/ (generador puro + modo) y mountain/ (generador de espiral)
 scripts/ui/         Escena principal, menús, tema, fondo animado, widgets, HUD y overlay del editor
-tests/              test_maze, test_spiral, test_tilt, test_interp, sim_bots y sim_lan + run_lan.sh
+tests/              Tests de generadores, inclinación, interpolación, comandos, bots y red con procesos reales
 ```
 
 ## Tests
@@ -39,11 +41,21 @@ godot --headless --path . -s res://tests/test_maze.gd
 godot --headless --path . -s res://tests/test_spiral.gd
 godot --headless --path . -s res://tests/test_tilt.gd
 godot --headless --path . -s res://tests/test_interp.gd
+godot --headless --path . -s res://tests/test_input_buffer.gd
 godot --headless --path . --fixed-fps 60 res://tests/sim_bots.tscn -- 15   # simulación solo con bots
 sh tests/run_lan.sh                                                          # LAN real: anfitrión + 2 clientes
 ```
 
-Validación de v0.1.0 con Godot 4.7.2: 500 semillas de laberinto y 200 de espiral sin fallos; inclinación e interpolación sin fallos; 15 rondas de bots sin atascos sin resolver; simulación LAN con anfitrión y dos clientes aprobada. Consulta `DESIGN.md` para los resultados y sus límites.
+Para probar el movimiento con retrasos variables, pérdida y reordenación de paquetes, usa Python 3 (solo biblioteca estándar). Ejecuta estas pruebas y `run_lan.sh` **una por una**: comparten el puerto 7777.
+
+```sh
+python3 tests/run_net_motion.py --scenario free --fps 30
+python3 tests/run_net_motion.py --scenario walls
+python3 tests/run_net_motion.py --scenario contact
+python3 tests/run_net_motion.py --scenario respawn
+```
+
+Cada escenario comprueba los saltos inesperados, la convergencia al detenerse y la cantidad de dashes/reapariciones. Los logs quedan en `tests/output/`. Consulta `DESIGN.md` para los resultados y sus límites.
 
 ## Exportar Android
 
@@ -51,7 +63,7 @@ Necesitas las plantillas de exportación **4.7.2**, Android SDK, Java y un keyst
 
 ```sh
 mkdir -p build
-godot --headless --path . --export-debug Android build/pistacho-v0.1.0-debug.apk
+godot --headless --path . --export-debug Android build/pistacho-v0.1.1-debug.apk
 ```
 
-El preset genera un APK firmado de depuración para `arm64-v8a` y `x86_64`, paquete `com.fabricio.pistacho`, versión `0.1.0`, código `4`, con permisos `INTERNET` y `VIBRATE`. `build/` y los keystores se excluyen de git. Es un APK para pruebas; la firma de distribución no está configurada en el repositorio.
+El preset genera un APK firmado de depuración para `arm64-v8a` y `x86_64`, paquete `com.fabricio.pistacho`, versión `0.1.1`, código `5`, con permisos `INTERNET` y `VIBRATE`. `build/` y los keystores se excluyen de git. Es un APK para pruebas; la firma de distribución no está configurada en el repositorio.

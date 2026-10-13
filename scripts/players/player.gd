@@ -12,6 +12,7 @@ const PlayerView = preload("res://scripts/players/player_view.gd")
 const LAYER_WALLS := 1
 const LAYER_PLAYERS := 2
 const LAYER_GHOST := 4
+const CORRECTION_RATE := 12.0
 
 var slot := 0
 var is_bot := false
@@ -25,6 +26,7 @@ var invuln_until := 0.0
 var fall_until := 0.0
 var respawn_at := Vector2.ZERO
 var ghost := false
+var teleport_id := 0
 var view: PlayerView
 ## Parámetros de física: Config en vivo (anfitrión) o la cfg de la ronda (predicción en cliente).
 var params: Dictionary[String, float]
@@ -145,6 +147,8 @@ func is_invulnerable() -> bool:
 func teleport(target: Vector2) -> void:
 	_teleport = true
 	_teleport_to = target
+	_correction = Vector2.ZERO
+	_velocity_correction = Vector2.ZERO
 
 
 ## Predicción: desplaza posición y velocidad hacia el estado del anfitrión (se aplica en _integrate_forces).
@@ -160,11 +164,11 @@ func hold(on: bool) -> void:
 
 ## Posición y velocidad tras aplicar las correcciones pendientes.
 func predicted_position() -> Vector2:
-	return position + _correction
+	return (_teleport_to if _teleport else position) + _correction
 
 
 func predicted_velocity() -> Vector2:
-	return linear_velocity + _velocity_correction
+	return (Vector2.ZERO if _teleport else linear_velocity) + _velocity_correction
 
 
 ## Fantasma: sin choques con otros jugadores mientras dura la invulnerabilidad.
@@ -186,17 +190,27 @@ func try_solidify(others: Array) -> void:
 
 func _integrate_forces(body: PhysicsDirectBodyState2D) -> void:
 	if _teleport:
-		body.transform = Transform2D(0.0, _teleport_to)
-		body.linear_velocity = Vector2.ZERO
+		# Puede llegar otro estado entre el aviso de reaparición y este paso físico.
+		body.transform = Transform2D(0.0, _teleport_to + _correction)
+		body.linear_velocity = _velocity_correction
 		_teleport = false
+		teleport_id += 1
+		_correction = Vector2.ZERO
+		_velocity_correction = Vector2.ZERO
+		view.position = Vector2.ZERO
 		_last_velocity = Vector2.ZERO
 		reset_physics_interpolation.call_deferred()
 		return
 	if _correction != Vector2.ZERO or _velocity_correction != Vector2.ZERO:
 		body.transform = Transform2D(0.0, body.transform.origin + _correction)
 		body.linear_velocity += _velocity_correction
+		# Compensar la imagen en el MISMO paso que desplaza el cuerpo, nunca al recibir el RPC.
+		view.position -= _correction
 		_correction = Vector2.ZERO
 		_velocity_correction = Vector2.ZERO
+	# Solo cambiar transformaciones en pasos físicos: Godot interpola cuerpo y dibujo juntos.
+	var visual_step := -view.position * (1.0 - exp(-CORRECTION_RATE * body.step))
+	view.position += visual_step.limit_length(params["max_speed"] * 0.5 * body.step)
 	if _hold:
 		body.linear_velocity = Vector2.ZERO
 	if _speed_cap > 0.0 and body.linear_velocity.length() > _speed_cap:

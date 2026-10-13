@@ -1,4 +1,4 @@
-# Pistacho — diseño v0.1.0
+# Pistacho — diseño v0.1.1
 
 ## Alcance de esta versión
 - Laberinto es el único modo registrado en `Game.MODE_SCENES`. El generador de Espiral tiene tests, pero su modo jugable queda pendiente.
@@ -20,11 +20,14 @@
 - `user://config.json` guarda solo valores cambiados + versión. `addons/godot_mcp/` es opcional y local: se ignora en git, se eliminó del historial publicado y el preset lo excluye del APK. `dev_bridge.gd` solo lo carga si existe, con el binario del editor y fuera de headless.
 
 ## Red (fase 2)
-- ENet en 7777, 3 clientes. Canales: 0 eventos/acciones fiables, 1 input, 2 estado: ENet retiene un canal tras un fiable perdido.
+- ENet en 7777, 3 clientes. Protocolo 2: canal 0 para eventos fiables, 1 para comandos (inclinación y dash), 2 para estado. Todos los equipos deben usar esta versión.
 - Estado a 60 Hz (~13 KB/s por cliente) con el reloj de simulación del anfitrión. Sin throttle de ENet (descarta no fiables si sube la latencia).
 - ROUND lleva modo + semilla + cfg completa del anfitrión: con otra cfg, la misma semilla da otro mapa.
-- Clientes: interpolación por instantáneas, no el lerp de la spec (`test_interp`: tirón p95 77–94 % → 10 %). Retardo = 1.5 intervalos + jitter recordado 10 s (40–250 ms); sin datos, el dibujo va al 60 % en vez de congelarse; saltos > 4 radios no se interpolan.
-- Predicción (`net_predict`, desvío de la spec): el cliente simula su bola con la cfg de la ronda y paredes locales; el anfitrión devuelve el último input aplicado y el cliente corrige (física al instante, vista suave). Caídas, metas y choques entre jugadores siguen siendo del anfitrión. Respuesta en localhost: 111 → ~50 ms.
+- Clientes: interpolación por instantáneas, no el lerp de la spec (`test_interp`: tirón p95 77–94 % → 10 %). Retardo = 1.5 intervalos + jitter recordado 10 s (40–250 ms); sin datos, el dibujo va al 60 % en vez de congelarse. Un contador explícito identifica las reapariciones: ya no se confunden con desplazamientos grandes debidos a paquetes perdidos.
+- Predicción (`net_predict`): el cliente simula su bola con la cfg de la ronda y paredes locales; el anfitrión devuelve el comando aplicado y el cliente corrige. Caídas, metas y choques entre jugadores siguen siendo del anfitrión. Respuesta medida en localhost: 48 ms.
+- Cada paquete lleva hasta 16 comandos recientes; el anfitrión espera un margen inicial de 3 ticks y ejecuta un comando por paso físico. Las copias recuperan pérdidas sin repetir acciones. Si falta un comando, mantiene la inclinación anterior sin repetir el dash y descarta las copias tardías ya simuladas.
+- La corrección de posición y su compensación visual se aplican juntas en `_integrate_forces`. El desplazamiento visual converge con velocidad limitada, y la bola local conserva la interpolación física a distintas tasas de imágenes. No se desplaza la imagen desde el RPC antes de mover el cuerpo.
+- El estado incluye la ronda y el contador de reapariciones. Se descartan estados viejos; las secuencias, historial y reloj predictivo se reinician al empezar otra ronda.
 - Input remoto sin llegar 0.3 s → cero. Peer caído (≤ 8 s) o que sale → bot sin parar la ronda. En partida la sala rechaza conexiones; `PROTOCOL` distinto → menú.
 
 ## Limitaciones y trabajo futuro
@@ -34,11 +37,11 @@
 - Mac como cliente: AWDL (AirDrop/Handoff) pausa la Wi-Fi periódicamente; el overlay muestra "hueco máx" y "sin datos".
 
 ## Android y pruebas
-- Preset Android: paquete `com.fabricio.pistacho`, versión `0.1.0`, código `4`; arquitecturas `arm64-v8a` y `x86_64`; permisos `INTERNET` y `VIBRATE`. Vibración activable desde Ajustes.
-- Exportación de prueba: `godot --headless --path . --export-debug Android build/pistacho-v0.1.0-debug.apk`. Firma de depuración, sin credenciales de distribución en git.
+- Preset Android: paquete `com.fabricio.pistacho`, versión `0.1.1`, código `5`; arquitecturas `arm64-v8a` y `x86_64`; permisos `INTERNET` y `VIBRATE`. Vibración activable desde Ajustes.
+- Exportación de prueba: `godot --headless --path . --export-debug Android build/pistacho-v0.1.1-debug.apk`. Firma de depuración, sin credenciales de distribución en git.
 - `-s res://tests/test_maze.gd | test_spiral.gd | test_tilt.gd | test_interp.gd`; `res://tests/sim_bots.tscn -- 15` (con `--fixed-fps 60`); `sh tests/run_lan.sh` (LAN real en localhost).
 
-### Validación de cierre (2026-10-13, Godot 4.7.2)
+### Validación inicial de v0.1.0 (2026-10-13, Godot 4.7.2)
 - Laberinto: 500 semillas, cuadrícula 22×13, 1872 reintentos del generador y 0 fallos. Espiral: 200 semillas, 0 reintentos y 0 fallos.
 - Inclinación: 0 fallos. Interpolación: 0 fallos en los tres perfiles de red a 60 y 120 FPS; como máximo un frame detenido en el perfil de pausas periódicas.
 - Bots: 15 rondas, media 20.8 s, máximo 25.6 s; tres parones mayores a 3 s, ninguno mayor a 6 s y ninguno sin resolver. La simulación usa semillas aleatorias; sus tiempos no son una garantía para todas las partidas.
@@ -47,3 +50,11 @@
 - Copia limpia de los archivos versionados: importación y arranque headless sin errores ni addon MCP.
 - APK de depuración exportado y firma verificada (esquemas v2/v3). Manifiesto comprobado: versión 0.1.0, código 4, Android mínimo 7.0/API 24, ambas arquitecturas y permisos esperados. El paquete no contiene el addon, tests ni capturas de revisión.
 - Estas comprobaciones de escritorio no sustituyen una prueba física de sensores, vibración, Atrás y Wi-Fi entre teléfonos Android.
+
+### Regresión del cliente en v0.1.1
+- Reproducción con procesos ENet reales y proxy UDP: retraso de 25–70 ms por dirección, 2 % de pérdida, reordenación y ráfagas con 180 ms adicionales. La prueba inicial del código antiguo detectó 124 desplazamientos anómalos entre imágenes, de hasta 70.4 px, incluso en espacio libre.
+- Tras la corrección, movimiento libre a 120 y 30 FPS: 0 saltos anómalos y menos de 0.02 px de desvío al detenerse. El resultado depende de la planificación de los procesos; la semilla fija controla el perfil de perturbación.
+- Paredes y dash a 120 FPS: 0 saltos anómalos, un dash por equipo y convergencia de 0.0 px. Empujón exclusivo del anfitrión: 0 saltos, corrección máxima 3.95 px y desvío final 0.014 px.
+- Caída y reaparición: se exige exactamente una reaparición en cada equipo; el salto deliberado no se cuenta como tirón. Se comprueban por separado los saltos inesperados y la convergencia posterior.
+- La simulación LAN original pasó con respuesta local de 48 ms, estados a 60 Hz y regreso al menú tras desconexión. Tests de laberinto, espiral, inclinación, interpolación y cola de comandos aprobados; 15 rondas de bots sin atascos sin resolver.
+- Falta confirmar esta versión en la pareja Mac/teléfono donde se observó el problema. Las simulaciones cubren el fallo reproducido y no garantizan todas las condiciones de una Wi-Fi real.
