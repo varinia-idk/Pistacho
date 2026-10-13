@@ -1,6 +1,0 @@
-[gd_scene format=3 uid="uid://bhi37bgan0e5w"]
-
-[ext_resource type="Script" uid="uid://btgibebiuo20q" path="res://scripts/objects/object_visual.gd" id="1_3fe2s"]
-
-[node name="ObjectVisual" type="Node2D" unique_id=54825472]
-script = ExtResource("1_3fe2s")
