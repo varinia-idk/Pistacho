@@ -262,6 +262,10 @@ func bot_desired_velocity(player: Player) -> Vector2:
 	return axis * speed + across * clampf(lateral * 6.0, -max_speed, max_speed)
 
 
+func progress_left(player: Player) -> float:
+	return float(dist_goal[data.index(cell_at(player.position))])
+
+
 ## Válido tras bot_desired_velocity en el mismo paso.
 func bot_wants_dash(player: Player) -> bool:
 	if _bot_run.get(player.slot, 0) < 4 or _bot_hole.get(player.slot, -1) >= 0:

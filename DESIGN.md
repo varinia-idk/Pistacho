@@ -13,7 +13,7 @@
 - Ranking de ronda: llegada a la meta; el resto por distancia BFS restante (3/2/1/0).
 - Única asignación de posición: al crear el cuerpo, antes de entrar al árbol. Después solo `teleport()` en `_integrate_forces`.
 - Tras caer: fantasma (sin choques entre jugadores) mientras dura la invulnerabilidad.
-- Bots: constantes internas (horizonte 0.25 s, ruido, reacción) escaladas por `bot_skill`.
+- Bots: constantes internas escaladas por `bot_skill`. Si llevan `bot_patience` s bloqueados, retroceden un tiempo aleatorio: ante humanos siempre; entre bots, el que va detrás (sin esto, atascos de hasta 58 s).
 - Tests: generadores puros sin autoloads (con `-s` los autoloads no existen al compilar; si un script falla, Godot no sale).
 - `addons/godot_mcp` queda como herramienta de editor; `dev_bridge.gd` lo excluye del APK.
 
@@ -27,3 +27,4 @@
 
 ## Tests
 - `godot --headless --path . -s res://tests/test_maze.gd` (500 semillas), `test_spiral.gd` (200) y `test_tilt.gd`.
+- `godot --headless --path . --fixed-fps 60 res://tests/sim_bots.tscn -- 15`: partida solo con bots; duración de rondas y parones.

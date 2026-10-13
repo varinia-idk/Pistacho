@@ -39,6 +39,7 @@ const DEFAULTS := {
 	"invuln_time": [1.0, 0.0, 3.0],
 	"bot_skill": [0.75, 0.1, 1.0],
 	"bot_corner": [0.35, 0.1, 1.0],
+	"bot_patience": [0.4, 0.1, 2.0],
 	# Laberinto
 	"maze_corridor": [1.6, 1.6, 3.0],
 	"maze_wall": [0.3, 0.3, 1.0],

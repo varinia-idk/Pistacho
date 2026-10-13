@@ -13,6 +13,7 @@ const LAYER_PLAYERS := 2
 const LAYER_GHOST := 4
 
 var slot := 0
+var is_bot := false
 var radius := 20.0
 var tilt := Vector2.ZERO        ## Input procesado [-1, 1], humano o bot.
 var state := State.ALIVE

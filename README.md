@@ -17,13 +17,15 @@ scripts/input/      Lectura de inclinación y gesto de dash
 scripts/players/    Jugador (RigidBody2D), vista y bot
 scripts/modes/      maze/ (generador puro + modo) y mountain/ (generador de espiral)
 scripts/ui/         Escena principal, HUD y overlay de debug
-tests/              test_maze.gd, test_spiral.gd
+tests/              test_maze, test_spiral, test_tilt y sim_bots (simulación solo con bots)
 ```
 
 ## Tests
 ```sh
 godot --headless --path . -s res://tests/test_maze.gd
 godot --headless --path . -s res://tests/test_spiral.gd
+godot --headless --path . -s res://tests/test_tilt.gd
+godot --headless --path . --fixed-fps 60 res://tests/sim_bots.tscn -- 15   # simulación solo con bots
 ```
 
 La versión anterior (v0.1.2) está en la etiqueta git `v0.1.2-legacy`.

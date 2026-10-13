@@ -26,7 +26,7 @@ var world: Node2D
 var mode: GameMode
 var players: Array[Player] = []
 var bots: Array[Bot] = []
-var local_slot := 0
+var local_slot := 0  ## -1 = sin jugador local (simulación solo con bots).
 var scores: Array[int] = [0, 0, 0, 0]
 var round_index := 0
 var rounds_total := 5
@@ -48,7 +48,7 @@ func player_name(slot: int) -> String:
 
 
 func local_player() -> Player:
-	return players[local_slot] if local_slot < players.size() else null
+	return players[local_slot] if local_slot >= 0 and local_slot < players.size() else null
 
 
 func start_match() -> void:
@@ -71,12 +71,12 @@ func match_ranking() -> Array[int]:
 
 
 func set_input(slot: int, value: Vector2) -> void:
-	if slot < players.size() and value.is_finite():
+	if slot >= 0 and slot < players.size() and value.is_finite():
 		players[slot].tilt = value.limit_length(1.0)
 
 
 func action(slot: int, kind: Action) -> void:
-	if phase != Phase.PLAYING or slot >= players.size():
+	if phase != Phase.PLAYING or slot < 0 or slot >= players.size():
 		return
 	match kind:
 		Action.DASH:
@@ -104,6 +104,7 @@ func _start_round() -> void:
 			player.fell.connect(_vibrate.bind(120))
 			player.dashed.connect(_vibrate.bind(30))
 		elif mode.uses_bots():
+			player.is_bot = true
 			bots.append(Bot.new(slot, _rng.randi()))
 	tilt.reset()
 	_set_phase(Phase.COUNTDOWN, COUNTDOWN)
@@ -139,9 +140,10 @@ func _physics_process(delta: float) -> void:
 
 
 func _play_step(delta: float) -> void:
-	set_input(local_slot, tilt.value)
-	if tilt.consume_dash():
-		action(local_slot, Action.DASH)
+	if local_slot >= 0:
+		set_input(local_slot, tilt.value)
+		if tilt.consume_dash():
+			action(local_slot, Action.DASH)
 	for bot in bots:
 		bot.think(mode, players[bot.slot], delta)
 	mode.physics_step(delta)

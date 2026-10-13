@@ -70,3 +70,8 @@ func bot_desired_velocity(_player: Player) -> Vector2:
 
 func bot_wants_dash(_player: Player) -> bool:
 	return false
+
+
+## Cuánto le falta al jugador para ganar (menor = va primero). Decide quién cede en un atasco entre bots.
+func progress_left(_player: Player) -> float:
+	return 0.0
